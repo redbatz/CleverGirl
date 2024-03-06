@@ -134,229 +134,276 @@ namespace CleverGirl.Helper {
 
              
             List<AmmoModeAttackEvaluation> rejectedDueToOverheat = new List<AmmoModeAttackEvaluation>();
-            // LOGIC: Now, evaluate every set of attacks in the list
-            for (int n = 0; n < list.Count; n++)
+            if (FindFirstValidAttackEvaluation(list, out float expectedDamage, out order))
             {
-                AmmoModeAttackEvaluation currentAttackEvaluation = list[n];
-                Mod.Log.Debug?.Write($" ==== Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
-                Mod.Log.Trace?.Write($"  with weapons {GetWeaponsListString(currentAttackEvaluation)}");
- 
-                if (currentAttackEvaluation.WeaponList.Count == 0)
-                {
-                    Mod.Log.Debug?.Write("SOLUTION REJECTED - no weapons!");
-                    continue;
-                }
-
-                // TODO: Does heatGenerated account for jump heat?
-                // TODO: Does not rollup heat!
-                bool willCauseOverheat = currentAttackEvaluation.HeatGenerated + currentHeat > acceptableHeat;
-                Mod.Log.Debug?.Write($"heat generated: {currentAttackEvaluation.HeatGenerated}  current: {currentHeat}  acceptable: {acceptableHeat}  willOverheat: {willCauseOverheat}");
-                //if (willCauseOverheat && attackerMech.OverheatWillCauseDeath())
-                //{
-                //    Mod.Log.Debug?.Write("SOLUTION REJECTED - overheat would cause own death");
-                //    continue;
-                //}
-                if (willCauseOverheat)
-                {
-                    Mod.Log.Info?.Write("SOLUTION REJECTED - would cause overheat.");
-                    rejectedDueToOverheat.Add(currentAttackEvaluation);
-                    continue;
-                }
-
-                // TODO: Check for acceptable damage from overheat - as per below
-                //bool flag6 = num4 >= existingTargetDamageForOverheat;
-                //Mod.Log.Debug?.Write("but enough damage for overheat attack? " + flag6);
-                //bool flag7 = attackEvaluation2.lowestHitChance >= weaponToHitThreshold;
-                //Mod.Log.Debug?.Write("but enough accuracy for overheat attack? " + flag7);
-                //if (willCauseOverheat && (!flag6 || !flag7)) {
-                //    Mod.Log.Debug?.Write("SOLUTION REJECTED - not enough damage or accuracy on an attack that will overheat");
-                //    continue;
-                //}
-
-                if (currentAttackEvaluation.AttackType == AIUtil.AttackType.Melee)
-                {
-
-                    if (targetActor == null)
-                    {
-                        Mod.Log.Debug?.Write("SOLUTION REJECTED - target is a building, we can't melee buildings!");
-                        continue;
-                    }
-
-                    //if (!attackerMech.Pathing.CanMeleeMoveTo(targetActor))
-                    //{
-                    //    Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker cannot make a melee move to target!");
-                    //    continue;
-                    //}
-
-                    if (attackerMech.HasMovedThisRound)
-                    {
-                        Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker has already moved!");
-                        continue;
-                    }
-
-                    if (bestMeleePosition == Vector3.zero)
-                    {
-                        Mod.Log.Debug?.Write("SOLUTION REJECTED - cannot build path to target!");
-                        continue;
-                    }
-
-                    // Note this seems weird, but it's an artifact of the behavior tree. If we've gotten a stationary node, don't move.
-                    if (!isStationary)
-                    {
-                        Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker did not choose a stationary move node, should not attack");
-                        continue;
-                    }
-
-                }
-
-                // Check for DFA auto-failures
-                if (currentAttackEvaluation.AttackType == AIUtil.AttackType.DeathFromAbove)
-                {
-                    if (targetActor == null)
-                    {
-                        Mod.Log.Debug?.Write("SOLUTION REJECTED - target is a building, we can't DFA buildings!");
-                        continue;
-                    }
-
-                    if (attackerMech.HasMovedThisRound)
-                    {
-                        Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker has already moved!");
-                        continue;
-                    }
-
-                    if (bestDFAPosition == Vector3.zero)
-                    {
-                        Mod.Log.Debug?.Write("SOLUTION REJECTED - cannot build path to target!");
-                        continue;
-                    }
-
-                    if (targetMaxArmorFractionFromHittableLocations < existingTargetDamageForDFA)
-                    {
-                        Mod.Log.Debug?.Write($"SOLUTION REJECTED - armor fraction: {targetMaxArmorFractionFromHittableLocations} < behVar(Float_ExistingTargetDamageForDFAAttack): {existingTargetDamageForDFA}!");
-                        continue;
-                    }
-
-                    if (attackerLegDamage > maxAllowedLegDamageForDFA)
-                    {
-                        Mod.Log.Debug?.Write($"SOLUTION REJECTED - leg damage: {attackerLegDamage} < behVar(Float_OwnMaxLegDamageForDFAAttack): {maxAllowedLegDamageForDFA}!");
-                        continue;
-                    }
-
-                    // Note this seems weird, but it's an artifact of the behavior tree. If we've gotten a stationary node, don't move.
-                    if (!isStationary)
-                    {
-                        Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker did not choose a stationary move node, should not attack");
-                        continue;
-                    }
-
-
-                }
-
-                // LOGIC: If we have some damage from an attack, can we improve upon it as a morale / called shot / multi-attack?
-                if (currentAttackEvaluation.ExpectedDamage > 0f)
-                {
-                    // TODO: Do we really need this spam?
-                    var weaponsListString = GetWeaponsListString(currentAttackEvaluation);
-                    Mod.Log.Debug?.Write($"Chosen AttackEvaluation has weapons: {weaponsListString}");
-                    
-                    BehaviorTreeResults behaviorTreeResults = new BehaviorTreeResults(BehaviorNodeState.Success);
-
-                    // LOGIC: Check for a morale attack (based on available morale) - target must be shutdown or knocked down
-                    //CalledShotAttackOrderInfo offensivePushAttackOrderInfo = AEHelper.MakeOffensivePushOrder(attackerAA, attackEvaluation2, target);
-                    //if (offensivePushAttackOrderInfo != null) {
-                    //    behaviorTreeResults.orderInfo = offensivePushAttackOrderInfo;
-                    //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using offensive push";
-                    //}
-
-                    // LOGIC: Check for a called shot - target must be shutdown or knocked down
-                    //CalledShotAttackOrderInfo calledShotAttackOrderInfo = AEHelper.MakeCalledShotOrder(attackerAA, attackEvaluation2, target, false);
-                    //if (calledShotAttackOrderInfo != null) {
-                    //    behaviorTreeResults.orderInfo = calledShotAttackOrderInfo;
-                    //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using called shot";
-                    //}
-
-                    // LOGIC: Check for multi-attack that will fit within our heat boundaries
-                    //MultiTargetAttackOrderInfo multiAttackOrderInfo = MultiAttack.MakeMultiAttackOrder(attackerAA, attackEvaluation2, enemyUnitIndex);
-                    //if (!willCauseOverheat && multiAttackOrderInfo != null) {
-                    //     Multi-attack in RT / BTA only makes sense to:
-                    //      1. maximize breaching shot (which ignores cover/etc) if you a single weapon
-                    //      2. spread status effects around while firing on a single target
-                    //      3. maximizing total damage across N targets, while sacrificing potential damage at a specific target
-                    //        3a. Especially with set sof weapons across range brackets, where you can split short-range weapons and long-range weapons                                
-                    //    behaviorTreeResults.orderInfo = multiAttackOrderInfo;
-                    //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using multi attack";
-                    //} 
-
-                    AttackOrderInfo attackOrderInfo = new AttackOrderInfo(target)
-                    {
-                        Weapons = new List<Weapon>(currentAttackEvaluation.WeaponList.Keys),
-                        TargetUnit = target,
-                        IsMelee = false,
-                        IsDeathFromAbove = false
-                    };
-                    
-                    // Apply the selected AmmoModes
-                    
-                    foreach (Weapon weapon in attackOrderInfo.Weapons)
-                    {
-                        AmmoModePair selectedAmmoMode = currentAttackEvaluation.WeaponList[weapon];
-                        weapon.ApplyAmmoMode(selectedAmmoMode);
-                        if (selectedAmmoMode.ammoId != null)
-                        {
-                            Mod.Log.Debug?.Write($"-- Applying selected AmmoMode {selectedAmmoMode} to weapon {weapon.UIName}");
-                        }
-                        else
-                        {
-                            Mod.Log.Debug?.Write($"-- Applying selected firing mode {selectedAmmoMode.modeId} to weapon {weapon.UIName}");
-                        }
-                    }
-
-                    AIUtil.AttackType attackType = currentAttackEvaluation.AttackType;
-                    Mod.Log.Debug?.Write($"Created attackOrderInfo with attackType: {attackType} vs. target: {target.DistinctId()}.  " +
-                        $"WeaponCount: {attackOrderInfo?.Weapons?.Count} IsMelee: {attackOrderInfo.IsMelee}  IsDeathFromAbove: {attackOrderInfo.IsDeathFromAbove}");
-
-                    if (attackType == AIUtil.AttackType.DeathFromAbove)
-                    {
-                        attackOrderInfo.IsDeathFromAbove = true;
-                        attackOrderInfo.AttackFromLocation = bestDFAPosition;
-
-                        attackOrderInfo.Weapons.Remove(attackerMech.MeleeWeapon);
-                        attackOrderInfo.Weapons.Remove(attackerMech.DFAWeapon);
-
-                    }
-                    else if (attackType == AIUtil.AttackType.Melee)
-                    {
-                        attackOrderInfo.IsMelee = true;
-                        attackOrderInfo.AttackFromLocation = bestMeleePosition;
-
-                        attackOrderInfo.Weapons.Remove(attackerMech.MeleeWeapon);
-                        attackOrderInfo.Weapons.Remove(attackerMech.DFAWeapon);
-                    }
-
-                    behaviorTreeResults.orderInfo = attackOrderInfo;
-                    behaviorTreeResults.debugOrderString = $" using attack type: {currentAttackEvaluation.AttackType} against: {target.DisplayName}";
-
-                    Mod.Log.Debug?.Write("Returning attack order " + behaviorTreeResults.debugOrderString);
-                    order = behaviorTreeResults;
-                    Mod.Log.Debug?.Write($" ==== DONE Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
-                    return currentAttackEvaluation.ExpectedDamage;
-                }
-                Mod.Log.Debug?.Write("Rejecting attack with no expected damage");
-                Mod.Log.Debug?.Write($" ==== DONE Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
+                return expectedDamage;
             }
 
             // For attacks which caused overheat, can we use less weapons?
             if (rejectedDueToOverheat.Count > 0)
             {
-                foreach (AmmoModeAttackEvaluation attackEvaluation in list)
+                Mod.Log.Trace?.Write($"No solution found, but {rejectedDueToOverheat.Count} overheating solutions exist.");
+                // Loop until we find solution or 1000 attempts or list has no AttackEvaluation with weapons left.
+                // Every loop remove one weapon from the weapons list, and if 0 remove the evaluation from the list.
+                int removeLoops = 0;
+                int totalRemoveAttempts = 0;
+                while (list.Any())
                 {
+                    Mod.Log.Trace?.Write($"Iteration #{removeLoops} to find valid solution with no overheating. {rejectedDueToOverheat.Count} candidates remain.");
                     
+                    // Explicit copy of the list so we can remove elements safely
+                    foreach (AmmoModeAttackEvaluation attackEvaluation in rejectedDueToOverheat.ToList())
+                    {
+                        Weapon randomKey = attackEvaluation.WeaponList.Keys.GetRandomElement();
+                        Mod.Log.Trace?.Write($"Removing random weapon {randomKey.UIName} with ammomode {attackEvaluation.WeaponList[randomKey]}");
+                        attackEvaluation.WeaponList.Remove(randomKey);
+                        if (attackEvaluation.WeaponList.Count == 0)
+                        {
+                            Mod.Log.Trace?.Write($"No weapons remain for AttackEvaluation, removing from candidates.");
+                            list.Remove(attackEvaluation);
+                            continue;
+                        }
+                        
+                        if (FindFirstValidAttackEvaluation(rejectedDueToOverheat, out expectedDamage, out order))
+                        {
+                            Mod.Log.Trace?.Write($"Found valid AttackEvaluation after {totalRemoveAttempts} attempts in {removeLoops} loops.");
+                            return expectedDamage;
+                        }
+                        if (++totalRemoveAttempts > 1000)
+                        {
+                            Mod.Log.Debug?.Write($"Aborting overheat weapons retry loop after {removeLoops} loops with {totalRemoveAttempts} total attempts.");
+                            goto failedRemoveLoop;
+                        }
+                    }
+                    removeLoops++;
                 }
             }
+            failedRemoveLoop:
             
-            Mod.Log.Debug?.Write("Could not build an AttackOrder with damage, returning a null order. Unit will likely brace.");
-            order = null;
+            Mod.Log.Debug?.Write("Could not build an AttackOrder with damage, returning the null order. Unit will likely brace.");
             return 0f;
+
+            bool FindFirstValidAttackEvaluation(List<AmmoModeAttackEvaluation> attackEvaluations,
+                out float makeAttackOrderForTarget, out BehaviorTreeResults order)
+            {
+                // LOGIC: Now, evaluate every set of attacks in the list
+                for (int n = 0; n < attackEvaluations.Count; n++)
+                {
+                    AmmoModeAttackEvaluation currentAttackEvaluation = attackEvaluations[n];
+                    Mod.Log.Debug?.Write($" ==== Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
+                    Mod.Log.Trace?.Write($"  with weapons {GetWeaponsListString(currentAttackEvaluation)}");
+ 
+                    if (currentAttackEvaluation.WeaponList.Count == 0)
+                    {
+                        Mod.Log.Debug?.Write("SOLUTION REJECTED - no weapons!");
+                        continue;
+                    }
+
+                    // TODO: Does heatGenerated account for jump heat?
+                    // TODO: Does not rollup heat!
+                    bool willCauseOverheat = currentAttackEvaluation.HeatGenerated + currentHeat > acceptableHeat;
+                    Mod.Log.Debug?.Write($"heat generated: {currentAttackEvaluation.HeatGenerated}  current: {currentHeat}  acceptable: {acceptableHeat}  willOverheat: {willCauseOverheat}");
+                    //if (willCauseOverheat && attackerMech.OverheatWillCauseDeath())
+                    //{
+                    //    Mod.Log.Debug?.Write("SOLUTION REJECTED - overheat would cause own death");
+                    //    continue;
+                    //}
+                    if (willCauseOverheat)
+                    {
+                        Mod.Log.Info?.Write("SOLUTION REJECTED - would cause overheat.");
+                        rejectedDueToOverheat.Add(currentAttackEvaluation);
+                        continue;
+                    }
+
+                    // TODO: Check for acceptable damage from overheat - as per below
+                    //bool flag6 = num4 >= existingTargetDamageForOverheat;
+                    //Mod.Log.Debug?.Write("but enough damage for overheat attack? " + flag6);
+                    //bool flag7 = attackEvaluation2.lowestHitChance >= weaponToHitThreshold;
+                    //Mod.Log.Debug?.Write("but enough accuracy for overheat attack? " + flag7);
+                    //if (willCauseOverheat && (!flag6 || !flag7)) {
+                    //    Mod.Log.Debug?.Write("SOLUTION REJECTED - not enough damage or accuracy on an attack that will overheat");
+                    //    continue;
+                    //}
+
+                    if (currentAttackEvaluation.AttackType == AIUtil.AttackType.Melee)
+                    {
+
+                        if (targetActor == null)
+                        {
+                            Mod.Log.Debug?.Write("SOLUTION REJECTED - target is a building, we can't melee buildings!");
+                            continue;
+                        }
+
+                        //if (!attackerMech.Pathing.CanMeleeMoveTo(targetActor))
+                        //{
+                        //    Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker cannot make a melee move to target!");
+                        //    continue;
+                        //}
+
+                        if (attackerMech.HasMovedThisRound)
+                        {
+                            Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker has already moved!");
+                            continue;
+                        }
+
+                        if (bestMeleePosition == Vector3.zero)
+                        {
+                            Mod.Log.Debug?.Write("SOLUTION REJECTED - cannot build path to target!");
+                            continue;
+                        }
+
+                        // Note this seems weird, but it's an artifact of the behavior tree. If we've gotten a stationary node, don't move.
+                        if (!isStationary)
+                        {
+                            Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker did not choose a stationary move node, should not attack");
+                            continue;
+                        }
+
+                    }
+
+                    // Check for DFA auto-failures
+                    if (currentAttackEvaluation.AttackType == AIUtil.AttackType.DeathFromAbove)
+                    {
+                        if (targetActor == null)
+                        {
+                            Mod.Log.Debug?.Write("SOLUTION REJECTED - target is a building, we can't DFA buildings!");
+                            continue;
+                        }
+
+                        if (attackerMech.HasMovedThisRound)
+                        {
+                            Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker has already moved!");
+                            continue;
+                        }
+
+                        if (bestDFAPosition == Vector3.zero)
+                        {
+                            Mod.Log.Debug?.Write("SOLUTION REJECTED - cannot build path to target!");
+                            continue;
+                        }
+
+                        if (targetMaxArmorFractionFromHittableLocations < existingTargetDamageForDFA)
+                        {
+                            Mod.Log.Debug?.Write($"SOLUTION REJECTED - armor fraction: {targetMaxArmorFractionFromHittableLocations} < behVar(Float_ExistingTargetDamageForDFAAttack): {existingTargetDamageForDFA}!");
+                            continue;
+                        }
+
+                        if (attackerLegDamage > maxAllowedLegDamageForDFA)
+                        {
+                            Mod.Log.Debug?.Write($"SOLUTION REJECTED - leg damage: {attackerLegDamage} < behVar(Float_OwnMaxLegDamageForDFAAttack): {maxAllowedLegDamageForDFA}!");
+                            continue;
+                        }
+
+                        // Note this seems weird, but it's an artifact of the behavior tree. If we've gotten a stationary node, don't move.
+                        if (!isStationary)
+                        {
+                            Mod.Log.Debug?.Write("SOLUTION REJECTED - attacker did not choose a stationary move node, should not attack");
+                            continue;
+                        }
+
+
+                    }
+
+                    // LOGIC: If we have some damage from an attack, can we improve upon it as a morale / called shot / multi-attack?
+                    if (currentAttackEvaluation.ExpectedDamage > 0f)
+                    {
+                        // TODO: Do we really need this spam?
+                        var weaponsListString = GetWeaponsListString(currentAttackEvaluation);
+                        Mod.Log.Debug?.Write($"Chosen AttackEvaluation has weapons: {weaponsListString}");
+                    
+                        BehaviorTreeResults behaviorTreeResults = new BehaviorTreeResults(BehaviorNodeState.Success);
+
+                        // LOGIC: Check for a morale attack (based on available morale) - target must be shutdown or knocked down
+                        //CalledShotAttackOrderInfo offensivePushAttackOrderInfo = AEHelper.MakeOffensivePushOrder(attackerAA, attackEvaluation2, target);
+                        //if (offensivePushAttackOrderInfo != null) {
+                        //    behaviorTreeResults.orderInfo = offensivePushAttackOrderInfo;
+                        //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using offensive push";
+                        //}
+
+                        // LOGIC: Check for a called shot - target must be shutdown or knocked down
+                        //CalledShotAttackOrderInfo calledShotAttackOrderInfo = AEHelper.MakeCalledShotOrder(attackerAA, attackEvaluation2, target, false);
+                        //if (calledShotAttackOrderInfo != null) {
+                        //    behaviorTreeResults.orderInfo = calledShotAttackOrderInfo;
+                        //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using called shot";
+                        //}
+
+                        // LOGIC: Check for multi-attack that will fit within our heat boundaries
+                        //MultiTargetAttackOrderInfo multiAttackOrderInfo = MultiAttack.MakeMultiAttackOrder(attackerAA, attackEvaluation2, enemyUnitIndex);
+                        //if (!willCauseOverheat && multiAttackOrderInfo != null) {
+                        //     Multi-attack in RT / BTA only makes sense to:
+                        //      1. maximize breaching shot (which ignores cover/etc) if you a single weapon
+                        //      2. spread status effects around while firing on a single target
+                        //      3. maximizing total damage across N targets, while sacrificing potential damage at a specific target
+                        //        3a. Especially with set sof weapons across range brackets, where you can split short-range weapons and long-range weapons                                
+                        //    behaviorTreeResults.orderInfo = multiAttackOrderInfo;
+                        //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using multi attack";
+                        //} 
+
+                        AttackOrderInfo attackOrderInfo = new AttackOrderInfo(target)
+                        {
+                            Weapons = new List<Weapon>(currentAttackEvaluation.WeaponList.Keys),
+                            TargetUnit = target,
+                            IsMelee = false,
+                            IsDeathFromAbove = false
+                        };
+                    
+                        // Apply the selected AmmoModes
+                    
+                        foreach (Weapon weapon in attackOrderInfo.Weapons)
+                        {
+                            AmmoModePair selectedAmmoMode = currentAttackEvaluation.WeaponList[weapon];
+                            weapon.ApplyAmmoMode(selectedAmmoMode);
+                            if (selectedAmmoMode.ammoId != null)
+                            {
+                                Mod.Log.Debug?.Write($"-- Applying selected AmmoMode {selectedAmmoMode} to weapon {weapon.UIName}");
+                            }
+                            else
+                            {
+                                Mod.Log.Debug?.Write($"-- Applying selected firing mode {selectedAmmoMode.modeId} to weapon {weapon.UIName}");
+                            }
+                        }
+
+                        AIUtil.AttackType attackType = currentAttackEvaluation.AttackType;
+                        Mod.Log.Debug?.Write($"Created attackOrderInfo with attackType: {attackType} vs. target: {target.DistinctId()}.  " +
+                                             $"WeaponCount: {attackOrderInfo?.Weapons?.Count} IsMelee: {attackOrderInfo.IsMelee}  IsDeathFromAbove: {attackOrderInfo.IsDeathFromAbove}");
+
+                        if (attackType == AIUtil.AttackType.DeathFromAbove)
+                        {
+                            attackOrderInfo.IsDeathFromAbove = true;
+                            attackOrderInfo.AttackFromLocation = bestDFAPosition;
+
+                            attackOrderInfo.Weapons.Remove(attackerMech.MeleeWeapon);
+                            attackOrderInfo.Weapons.Remove(attackerMech.DFAWeapon);
+
+                        }
+                        else if (attackType == AIUtil.AttackType.Melee)
+                        {
+                            attackOrderInfo.IsMelee = true;
+                            attackOrderInfo.AttackFromLocation = bestMeleePosition;
+
+                            attackOrderInfo.Weapons.Remove(attackerMech.MeleeWeapon);
+                            attackOrderInfo.Weapons.Remove(attackerMech.DFAWeapon);
+                        }
+
+                        behaviorTreeResults.orderInfo = attackOrderInfo;
+                        behaviorTreeResults.debugOrderString = $" using attack type: {currentAttackEvaluation.AttackType} against: {target.DisplayName}";
+
+                        Mod.Log.Debug?.Write("Returning attack order " + behaviorTreeResults.debugOrderString);
+                        order = behaviorTreeResults;
+                        Mod.Log.Debug?.Write($" ==== DONE Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
+                        {
+                            makeAttackOrderForTarget = currentAttackEvaluation.ExpectedDamage;
+                            return true;
+                        }
+                    }
+                    Mod.Log.Debug?.Write("Rejecting attack with no expected damage");
+                    Mod.Log.Debug?.Write($" ==== DONE Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
+                }
+
+                makeAttackOrderForTarget = 0f;
+                order = null;
+                return false;
+            }
         }
 
         private static string GetWeaponsListString(AmmoModeAttackEvaluation currentAttackEvaluation)
