@@ -196,12 +196,45 @@ namespace CleverGirl
         public static List<List<CondensedWeaponAmmoMode>> MakeRangedWeaponSets(List<CondensedWeapon> potentialWeapons,
             ICombatant target, Vector3 attackPosition)
         {
+            // Prerequisite, check if there are too many ammo/modes
+            // If so, switch to max and default mode only
+            int ammoModeCounter = potentialWeapons.Sum(condensedWeapon => condensedWeapon.ammoModes.Count);
+            bool useSimplifiedOperation = ammoModeCounter > Mod.Config.SimplifiedAmmoModeOperationThreshold;
+            if (useSimplifiedOperation)
+            {
+                Mod.Log.Debug?.Write($"Found {ammoModeCounter} ammo modes, which is over threshold {Mod.Config.SimplifiedAmmoModeOperationThreshold}.");
+                Mod.Log.Debug?.Write($" => Enabling simplified operation for ammo/mode combinations.");
+            }
+
             // First, filter weapons with ammoModes that won't fire
             List<CondensedWeapon> condensedWeaponAmmoModes = new List<CondensedWeapon>();
             float distance = (attackPosition - target.CurrentPosition).magnitude;
             foreach (CondensedWeapon cWeap in potentialWeapons)
             {
                 Weapon wep = cWeap.First;
+
+                // If simplified is enabled, only find max shots and base mode.
+                List<string> simplifiedModeIds = new();
+                if (useSimplifiedOperation && wep.AvaibleModes().Count > 1)
+                {
+                    if (wep.AvaibleModes().First(weaponMode => weaponMode.isBaseMode, out WeaponMode baseMode))
+                    {
+                        simplifiedModeIds.Add(baseMode.Id);
+                        Mod.Log.Debug?.Write($"Simplified ammo/mode operation => Found base mode '{baseMode.Id}'.");
+                    }
+
+                    if (wep.AvaibleModes().MaxBy(weaponMode => weaponMode.ShotsWhenFired, out WeaponMode maxMode) && maxMode.Id != baseMode.Id)
+                    {
+                        simplifiedModeIds.Add(maxMode.Id);
+                        Mod.Log.Debug?.Write($"Simplified ammo/mode operation => Found maximum shots mode '{maxMode.Id}'.");
+                    }
+
+                    if (!simplifiedModeIds.Any())
+                    {
+                        Mod.Log.Error?.Write($"Simplified ammo/mode operation => Skipping {wep.defId}, unable to find base mode.");
+                        continue;
+                    }
+                }
                 
                 // Decided if need to check one-shot case. CAC combines the JSON field "StartingAmmoCapacity" with the JSON object InternalAmmo, so checking the latter covers both.
                 bool hasInternalAmmo = wep.exDef().isHaveInternalAmmo;
@@ -210,6 +243,10 @@ namespace CleverGirl
                 List<AmmoModePair> validAmmoModes = new List<AmmoModePair>();
                 foreach (AmmoModePair ammoMode in cWeap.ammoModes)
                 {
+                    if (useSimplifiedOperation && !simplifiedModeIds.Contains(ammoMode.modeId))
+                    {
+                        continue;
+                    }
                     wep.ApplyAmmoMode(ammoMode);
                     if (distance < wep.MinRange)
                     {
@@ -217,18 +254,18 @@ namespace CleverGirl
                         continue;
                     }
                    
-                        //Does the current mode use internal ammo and does it have enough for just a single shot?
-                        //This can be a false positive if the mode had more internal ammo originally but now has exactly enough ammunition left for a single shot. But that is probably a good case for the AI To be a bit more hesitant either way.
-                        if (hasInternalAmmo && wep.mode().AmmoCategory.BaseCategory.UsesInternalAmmo && wep.CurrentAmmo == wep.mode().ShotsWhenFired)
+                    //Does the current mode use internal ammo and does it have enough for just a single shot?
+                    //This can be a false positive if the mode had more internal ammo originally but now has exactly enough ammunition left for a single shot. But that is probably a good case for the AI To be a bit more hesitant either way.
+                    if (hasInternalAmmo && wep.mode().AmmoCategory.BaseCategory.UsesInternalAmmo && wep.CurrentAmmo == wep.mode().ShotsWhenFired)
+                    {
+                        float toHitFromPosition = cWeap.First.GetToHitFromPosition(target, 1, attackPosition,
+                            target.CurrentPosition, true, true, false);
+                        if (toHitFromPosition < Mod.Config.Weights.OneShotMinimumToHit)
                         {
-                            float toHitFromPosition = cWeap.First.GetToHitFromPosition(target, 1, attackPosition,
-                                target.CurrentPosition, true, true, false);
-                            if (toHitFromPosition < Mod.Config.Weights.OneShotMinimumToHit)
-                            {
-                                Mod.Log.Debug?.Write($" Skipping ammo mode {ammoMode} for {wep.UIName} in ranged set as toHitFromPosition: {toHitFromPosition} is below OneShotMinimumToHit: {Mod.Config.Weights.OneShotMinimumToHit}");
-                                continue;
-                            }
+                            Mod.Log.Debug?.Write($" Skipping ammo mode {ammoMode} for {wep.UIName} in ranged set as toHitFromPosition: {toHitFromPosition} is below OneShotMinimumToHit: {Mod.Config.Weights.OneShotMinimumToHit}");
+                            continue;
                         }
+                    }
                     
                     validAmmoModes.Add(ammoMode);
                     
@@ -250,7 +287,6 @@ namespace CleverGirl
             }
 
             return MakeWeaponAmmoModeSets(condensedWeaponAmmoModes);
-
         }
 
          public static List<List<CondensedWeaponAmmoMode>> MakeWeaponAmmoModeSets(List<CondensedWeapon> weapons)

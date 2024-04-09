@@ -362,8 +362,11 @@ namespace CleverGirl.Helper {
                                 Mod.Log.Debug?.Write($"-- Applying selected firing mode {selectedAmmoMode.modeId} to weapon {weapon.UIName}");
                             }
                         }
-
-                        AIUtil.AttackType attackType = currentAttackEvaluation.AttackType;
+                        
+                        //Now that ammo and mode has been decided, we can convert back to the vanilla AttackEvulation
+                        AttackEvaluation attackEvaluation = currentAttackEvaluation.ToSimpleAttackEvaluation();
+                        
+                        AIUtil.AttackType attackType = attackEvaluation.AttackType;
                         Mod.Log.Debug?.Write($"Created attackOrderInfo with attackType: {attackType} vs. target: {target.DistinctId()}.  " +
                                              $"WeaponCount: {attackOrderInfo?.Weapons?.Count} IsMelee: {attackOrderInfo.IsMelee}  IsDeathFromAbove: {attackOrderInfo.IsDeathFromAbove}");
 
@@ -386,13 +389,13 @@ namespace CleverGirl.Helper {
                         }
 
                         behaviorTreeResults.orderInfo = attackOrderInfo;
-                        behaviorTreeResults.debugOrderString = $" using attack type: {currentAttackEvaluation.AttackType} against: {target.DisplayName}";
+                        behaviorTreeResults.debugOrderString = $" using attack type: {attackEvaluation.AttackType} against: {target.DisplayName}";
 
                         Mod.Log.Debug?.Write("Returning attack order " + behaviorTreeResults.debugOrderString);
                         order = behaviorTreeResults;
                         Mod.Log.Debug?.Write($" ==== DONE Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
                         {
-                            makeAttackOrderForTarget = currentAttackEvaluation.ExpectedDamage;
+                            makeAttackOrderForTarget = attackEvaluation.ExpectedDamage;
                             return true;
                         }
                     }
@@ -555,18 +558,59 @@ namespace CleverGirl.Helper {
         private static bool DoesMechFavorMelee(Mech attacker)
         {
             bool isMeleeMech = false;
-            if (Mod.Config.UseCBTBEMelee && attacker.StatCollection.GetValue<bool>(ModStats.CBTBE_HasPhysicalWeapon))
+            // if (Mod.Config.UseCBTBEMelee && attacker.StatCollection.GetValue<bool>(ModStats.CBTBE_HasPhysicalWeapon))
+            if (Mod.Config.UseCBTBEMelee)
             {
-                Mod.Log.Debug?.Write(" Unit has CBTBE physical weapon, marking isMeleeMech.");
-                isMeleeMech = true;
+                if (attacker.StatCollection.GetValue<bool>(ModStats.CBTBE_HasPhysicalWeapon))
+                {
+                    Mod.Log.Debug?.Write(" Unit has CBTBE physical weapon, marking isMeleeMech.");
+                    isMeleeMech = true;
+                }
+                else
+                {
+                    // Weapons that have no minimal range are fine to use with a melee attack
+                    // Weapons with a minimal range but no forbidden range will be evaluated as 50% efficient
+                    float amountWeaponsFireMeleeWithoutPenalty = 0f;
+                    foreach (Weapon weapon in attacker.Weapons)
+                    {
+                        AmmoModePair currentAmmoMode = weapon.getCurrentAmmoMode();
+                        bool onlyModesWithMinRange = false;
+                        foreach (AmmoModePair ammoModePair in weapon.getAvaibleFiringMethods())
+                        {
+                            weapon.ApplyAmmoMode(ammoModePair);
+                            if (weapon.MinRange == 0)
+                            {
+                                amountWeaponsFireMeleeWithoutPenalty++;
+                                onlyModesWithMinRange = false;
+                                break;
+                            } 
+                            if (weapon.ForbiddenRange() == 0)
+                            {
+                                onlyModesWithMinRange = true;
+                            }
+                        }
+
+                        if (onlyModesWithMinRange)
+                        {
+                            amountWeaponsFireMeleeWithoutPenalty += 0.5f;
+                        }
+
+                        weapon.ApplyAmmoMode(currentAmmoMode);
+                        weapon.ResetTempAmmo();
+                    }
+
+                    if (amountWeaponsFireMeleeWithoutPenalty * Mod.Config.Weights.PunchbotDamageMulti >= attacker.Weapons.Count)
+                    {
+                        isMeleeMech = true;
+                    }
+                }
             }
             else
             {
+                //Due to how weapon categories are set up with CBTBE this will count practically all weapons as melee. So this check makes no sense if CBTBE is enabled.
                 int rawRangedDam = 0, rawMeleeDam = 0;
                 foreach (Weapon weapon in attacker.Weapons)
                 {
-                    //TODO: Instead of the very simplistic and naive approach below, use proper damage prediction for melee weapon and ranged weapons?
-                    //      Actually, due to how weapon categories are set up this will count practically all weapons as melee. We should probably check if each weapon is actually a melee weapon instead.
                     if (weapon.WeaponCategoryValue.CanUseInMelee)
                     {
                         rawMeleeDam += (int)(weapon.DamagePerShot * weapon.ShotsWhenFired);

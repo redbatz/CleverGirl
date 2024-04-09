@@ -31,4 +31,15 @@ public class AmmoModeAttackEvaluation
       string weaponString = string.Join(", ", WeaponList.Select(wamp => wamp.Key.UIName + "[" + wamp.Value + "]"));
       return $"Weapons: {weaponString} AttackType: {AttackType} HeatGenerated: {HeatGenerated} ExpectedDamage: {ExpectedDamage} lowestHitChance: {lowestHitChance}";
     }
+
+    public AttackEvaluator.AttackEvaluation ToSimpleAttackEvaluation()
+    {
+      AttackEvaluator.AttackEvaluation simple = new AttackEvaluator.AttackEvaluation();
+      simple.AttackType = AttackType;
+      simple.ExpectedDamage = ExpectedDamage;
+      simple.HeatGenerated = HeatGenerated;
+      simple.lowestHitChance = lowestHitChance;
+      simple.WeaponList = new List<Weapon>(WeaponList.Keys);
+      return simple;
+    }
 }
