@@ -313,32 +313,6 @@ namespace CleverGirl.Helper {
                     
                         BehaviorTreeResults behaviorTreeResults = new BehaviorTreeResults(BehaviorNodeState.Success);
 
-                        // LOGIC: Check for a morale attack (based on available morale) - target must be shutdown or knocked down
-                        //CalledShotAttackOrderInfo offensivePushAttackOrderInfo = AEHelper.MakeOffensivePushOrder(attackerAA, attackEvaluation2, target);
-                        //if (offensivePushAttackOrderInfo != null) {
-                        //    behaviorTreeResults.orderInfo = offensivePushAttackOrderInfo;
-                        //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using offensive push";
-                        //}
-
-                        // LOGIC: Check for a called shot - target must be shutdown or knocked down
-                        //CalledShotAttackOrderInfo calledShotAttackOrderInfo = AEHelper.MakeCalledShotOrder(attackerAA, attackEvaluation2, target, false);
-                        //if (calledShotAttackOrderInfo != null) {
-                        //    behaviorTreeResults.orderInfo = calledShotAttackOrderInfo;
-                        //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using called shot";
-                        //}
-
-                        // LOGIC: Check for multi-attack that will fit within our heat boundaries
-                        //MultiTargetAttackOrderInfo multiAttackOrderInfo = MultiAttack.MakeMultiAttackOrder(attackerAA, attackEvaluation2, enemyUnitIndex);
-                        //if (!willCauseOverheat && multiAttackOrderInfo != null) {
-                        //     Multi-attack in RT / BTA only makes sense to:
-                        //      1. maximize breaching shot (which ignores cover/etc) if you a single weapon
-                        //      2. spread status effects around while firing on a single target
-                        //      3. maximizing total damage across N targets, while sacrificing potential damage at a specific target
-                        //        3a. Especially with set sof weapons across range brackets, where you can split short-range weapons and long-range weapons                                
-                        //    behaviorTreeResults.orderInfo = multiAttackOrderInfo;
-                        //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using multi attack";
-                        //} 
-
                         AttackOrderInfo attackOrderInfo = new AttackOrderInfo(target)
                         {
                             Weapons = new List<Weapon>(currentAttackEvaluation.WeaponList.Keys),
@@ -370,6 +344,7 @@ namespace CleverGirl.Helper {
                         Mod.Log.Debug?.Write($"Created attackOrderInfo with attackType: {attackType} vs. target: {target.DistinctId()}.  " +
                                              $"WeaponCount: {attackOrderInfo?.Weapons?.Count} IsMelee: {attackOrderInfo.IsMelee}  IsDeathFromAbove: {attackOrderInfo.IsDeathFromAbove}");
 
+                        string attackOrderString = null;
                         if (attackType == AIUtil.AttackType.DeathFromAbove)
                         {
                             attackOrderInfo.IsDeathFromAbove = true;
@@ -387,9 +362,46 @@ namespace CleverGirl.Helper {
                             attackOrderInfo.Weapons.Remove(attackerMech.MeleeWeapon);
                             attackOrderInfo.Weapons.Remove(attackerMech.DFAWeapon);
                         }
+                        else
+                        {
+                            int? targetIndex = ConvertTargetToUnitIndex(attackerAA, target);
+                            if (targetIndex != null)
+                            {
+                                // LOGIC: Check for a morale attack (based on available morale) - target must be shutdown or knocked down
+                                CalledShotAttackOrderInfo offensivePushAttackOrderInfo = AttackEvaluator.MakeOffensivePushOrder(attackerAA, attackEvaluation, targetIndex.Value);
+                                if (offensivePushAttackOrderInfo != null)
+                                {
+                                    Mod.Log.Debug?.Write($"-- Converting to an offensive push order");
+                                    attackOrderInfo = offensivePushAttackOrderInfo;
+                                    attackOrderString = $" using offensive push against: {target.DisplayName}";
+                                }
+                                else
+                                {
+                                     // LOGIC: Check for a called shot - target must be shutdown or knocked down
+                                    CalledShotAttackOrderInfo calledShotAttackOrderInfo = AttackEvaluator.MakeCalledShotOrder(attackerAA, attackEvaluation, targetIndex.Value, false);
+                                    if (calledShotAttackOrderInfo != null) {
+                                        Mod.Log.Debug?.Write($"-- Converting to called shot order");
+                                        attackOrderInfo  = calledShotAttackOrderInfo;
+                                        attackOrderString = $" using called shot against: {target.DisplayName}";
+                                    }
+
+                                    // LOGIC: Check for multi-attack that will fit within our heat boundaries
+                                    //MultiTargetAttackOrderInfo multiAttackOrderInfo = MultiAttack.MakeMultiAttackOrder(attackerAA, attackEvaluation2, enemyUnitIndex);
+                                    //if (!willCauseOverheat && multiAttackOrderInfo != null) {
+                                    //     Multi-attack in RT / BTA only makes sense to:
+                                    //      1. maximize breaching shot (which ignores cover/etc) if you a single weapon
+                                    //      2. spread status effects around while firing on a single target
+                                    //      3. maximizing total damage across N targets, while sacrificing potential damage at a specific target
+                                    //        3a. Especially with set sof weapons across range brackets, where you can split short-range weapons and long-range weapons                                
+                                    //    behaviorTreeResults.orderInfo = multiAttackOrderInfo;
+                                    //    behaviorTreeResults.debugOrderString = attackerAA.DisplayName + " using multi attack";
+                                    //} 
+                                }
+                            }
+                        }
 
                         behaviorTreeResults.orderInfo = attackOrderInfo;
-                        behaviorTreeResults.debugOrderString = $" using attack type: {attackEvaluation.AttackType} against: {target.DisplayName}";
+                        behaviorTreeResults.debugOrderString = attackOrderString ?? $" using attack type: {attackEvaluation.AttackType} against: {target.DisplayName}";
 
                         Mod.Log.Debug?.Write("Returning attack order " + behaviorTreeResults.debugOrderString);
                         order = behaviorTreeResults;
@@ -407,6 +419,20 @@ namespace CleverGirl.Helper {
                 order = null;
                 return false;
             }
+        }
+
+        private static int? ConvertTargetToUnitIndex(AbstractActor attacker, ICombatant target)
+        {
+            for (var index = 0; index < attacker.BehaviorTree.enemyUnits.Count; index++)
+            {
+                if (attacker.BehaviorTree.enemyUnits[index] == target)
+                {
+                    return index;
+                }
+            }
+
+            Mod.Log.Error?.Write($"Unable to find target index in enemy units!");
+            return null;
         }
 
         private static string GetWeaponsListString(AmmoModeAttackEvaluation currentAttackEvaluation)
