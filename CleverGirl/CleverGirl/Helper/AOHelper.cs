@@ -140,14 +140,14 @@ namespace CleverGirl.Helper {
             }
 
             // For attacks which caused overheat, can we use less weapons?
-            if (rejectedDueToOverheat.Count > 0)
+            if (rejectedDueToOverheat.Any())
             {
                 Mod.Log.Trace?.Write($"No solution found, but {rejectedDueToOverheat.Count} overheating solutions exist.");
                 // Loop until we find solution or 1000 attempts or list has no AttackEvaluation with weapons left.
                 // Every loop remove one weapon from the weapons list, and if 0 remove the evaluation from the list.
                 int removeLoops = 0;
                 int totalRemoveAttempts = 0;
-                while (list.Any())
+                while (rejectedDueToOverheat.Any())
                 {
                     Mod.Log.Trace?.Write($"Iteration #{removeLoops} to find valid solution with no overheating. {rejectedDueToOverheat.Count} candidates remain.");
                     
