@@ -1,4 +1,5 @@
 ﻿using CleverGirl.Helper;
+using CustAmmoCategories;
 
 namespace CleverGirl.Patches
 {
@@ -50,12 +51,12 @@ namespace CleverGirl.Patches
 
             Mod.AttackEvalLog.Info?.Write($"  Opportunity Fire damageThreshold: {opportunityFireThreshold}  takeawayThreshold: {opportunityFireTakeawayThreshold}");
 
-            if (designatedTarget != null) {
+            if (designatedTarget != null && !designatedTarget.isSpawnProtected()) {
                 bestTargDamage = AOHelper.MakeAttackOrderForTarget(unit, designatedTarget, isStationary, out behaviorTreeResults) * opportunityFireThreshold;
                 bestTargFirepowerReduction = AIAttackEvaluator.EvaluateFirepowerReductionFromAttack(unit, unit.CurrentPosition, designatedTarget, designatedTarget.CurrentPosition, designatedTarget.CurrentRotation, unit.Weapons, MeleeAttackType.NotSet) * opportunityFireTakeawayThreshold;
                 Mod.AttackEvalLog.Debug?.Write($"  DesignatedTarget: {designatedTarget.DistinctId()} will suffer: {bestTargDamage} damage and lose: {bestTargFirepowerReduction} firepower from attack.");
             } else {
-                Mod.AttackEvalLog.Debug?.Write("  No designated target identified.");
+                Mod.AttackEvalLog.Debug?.Write("  No valid designated target identified.");
             }
 
             Mod.AttackEvalLog.Debug?.Write(" === END DESIGNATED TARGET FIRE CHECKS ===");
@@ -64,7 +65,7 @@ namespace CleverGirl.Patches
             // Walk through every alive enemy, and see if a better shot presents itself.
             for (int j = 0; j < unit.BehaviorTree.enemyUnits.Count; j++) {
                 ICombatant combatant = unit.BehaviorTree.enemyUnits[j];
-                if (combatant == designatedTarget || combatant.IsDead) { continue; }
+                if (combatant == designatedTarget || combatant.IsDead || combatant.isSpawnProtected()) { continue; }
 
                 Mod.AttackEvalLog.Debug?.Write($"  Checking opportunity fire against target: {combatant.DistinctId()}");
 
