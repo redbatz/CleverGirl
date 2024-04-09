@@ -26,6 +26,7 @@ namespace CleverGirl {
             Mod.Log.Info?.Write("=== MOD CONFIG BEGIN ===");
             Mod.Log.Info?.Write($" LOGGING -- Debug:{this.Debug} Trace:{this.Trace}");
             Mod.Log.Info?.Write($" CBTBEMelee: {this.UseCBTBEMelee}");
+            Mod.Log.Info?.Write($" SimplifiedAmmoModeOperationThreshold: {this.SimplifiedAmmoModeOperationThreshold}");
             Mod.Log.Info?.Write("");
             Mod.Log.Info?.Write("--- Decision Weights ---");
             Mod.Log.Info?.Write($" FriendlyDamageMulti: {this.Weights.FriendlyDamageMulti}");
