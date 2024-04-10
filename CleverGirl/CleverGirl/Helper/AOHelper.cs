@@ -36,9 +36,17 @@ namespace CleverGirl.Helper {
 
             Mech attackerMech = attackerAA as Mech;
             float currentHeat = attackerMech == null ? 0f : (float)attackerMech.CurrentHeat;
-            float acceptableHeat = attackerMech == null ? float.MaxValue : AIUtil.GetAcceptableHeatLevelForMech(attackerMech); ;
-            Mod.Log.Debug?.Write($" heat: current: {currentHeat} acceptable: {acceptableHeat}");
-
+            float acceptableHeat = attackerMech == null ? float.MaxValue : AIUtil.GetAcceptableHeatLevelForMech(attackerMech);
+            float behaviorAcceptableHeatLevel = attackerMech == null ? 0f : BehaviorHelper.GetBehaviorVariableValue(attackerMech.BehaviorTree, BehaviorVariableName.Float_AcceptableHeatLevel).FloatVal;
+            if (behaviorAcceptableHeatLevel > 1)
+            {
+                acceptableHeat *= behaviorAcceptableHeatLevel;
+                Mod.Log.Debug?.Write($" heat: current: {currentHeat} behaviorAcceptableHeatLevel: {behaviorAcceptableHeatLevel} acceptable: {acceptableHeat}");
+            }
+            else
+            {
+                Mod.Log.Debug?.Write($" heat: current: {currentHeat} acceptable: {acceptableHeat}");
+            }
             // float weaponToHitThreshold = attackerAA.BehaviorTree.weaponToHitThreshold;
 
             // Filter weapons that cannot contribute to the battle
