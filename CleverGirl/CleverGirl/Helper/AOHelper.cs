@@ -148,19 +148,20 @@ namespace CleverGirl.Helper {
             }
 
             // For attacks which caused overheat, can we use less weapons?
-            if (rejectedDueToOverheat.Any())
+            if (Mod.Config.AttemptReducingOverheatSolutions && rejectedDueToOverheat.Any()) 
             {
-                Mod.Log.Trace?.Write($"No solution found, but {rejectedDueToOverheat.Count} overheating solutions exist.");
+                Mod.Log.Debug?.Write($"No solution found, but {rejectedDueToOverheat.Count} overheating solutions exist.");
                 // Loop until we find solution or 1000 attempts or list has no AttackEvaluation with weapons left.
                 // Every loop remove one weapon from the weapons list, and if 0 remove the evaluation from the list.
                 int removeLoops = 0;
                 int totalRemoveAttempts = 0;
-                while (rejectedDueToOverheat.Any())
+                List<AmmoModeAttackEvaluation> overheatSolutions = rejectedDueToOverheat.ToList();
+                while (overheatSolutions.Any())
                 {
-                    Mod.Log.Trace?.Write($"Iteration #{removeLoops} to find valid solution with no overheating. {rejectedDueToOverheat.Count} candidates remain.");
-                    
+                    Mod.Log.Debug?.Write($"Iteration #{removeLoops} to find valid solution with no overheating. {overheatSolutions.Count} candidates remain.");
+
                     // Explicit copy of the list so we can remove elements safely
-                    foreach (AmmoModeAttackEvaluation attackEvaluation in rejectedDueToOverheat.ToList())
+                    foreach (AmmoModeAttackEvaluation attackEvaluation in overheatSolutions.ToList())
                     {
                         Weapon randomKey = attackEvaluation.WeaponList.Keys.GetRandomElement();
                         Mod.Log.Trace?.Write($"Removing random weapon {randomKey.UIName} with ammomode {attackEvaluation.WeaponList[randomKey]}");
@@ -168,32 +169,35 @@ namespace CleverGirl.Helper {
                         if (attackEvaluation.WeaponList.Count == 0)
                         {
                             Mod.Log.Trace?.Write($"No weapons remain for AttackEvaluation, removing from candidates.");
-                            list.Remove(attackEvaluation);
+                            overheatSolutions.Remove(attackEvaluation);
                             continue;
                         }
-                        
-                        if (FindFirstValidAttackEvaluation(rejectedDueToOverheat, out expectedDamage, out order))
+
+                        if (FindFirstValidAttackEvaluation(overheatSolutions, out expectedDamage, out order))
                         {
-                            Mod.Log.Trace?.Write($"Found valid AttackEvaluation after {totalRemoveAttempts} attempts in {removeLoops} loops.");
+                            Mod.Log.Debug?.Write($"Found valid AttackEvaluation after {totalRemoveAttempts} attempts in {removeLoops} loops.");
                             return expectedDamage;
                         }
+
                         if (++totalRemoveAttempts > 1000)
                         {
                             Mod.Log.Debug?.Write($"Aborting overheat weapons retry loop after {removeLoops} loops with {totalRemoveAttempts} total attempts.");
                             goto failedRemoveLoop;
                         }
                     }
+
                     removeLoops++;
                 }
             }
+
             failedRemoveLoop:
             
             Mod.Log.Debug?.Write("Could not build an AttackOrder with damage, returning the null order. Unit will likely brace.");
             return 0f;
 
-            bool FindFirstValidAttackEvaluation(List<AmmoModeAttackEvaluation> attackEvaluations,
-                out float makeAttackOrderForTarget, out BehaviorTreeResults order)
+            bool FindFirstValidAttackEvaluation(List<AmmoModeAttackEvaluation> attackEvaluations, out float makeAttackOrderForTarget, out BehaviorTreeResults order)
             {
+                Mod.Log.Debug?.Write($"Attempting to find first valid attack evaluation out of {attackEvaluations.Count}.");
                 // LOGIC: Now, evaluate every set of attacks in the list
                 for (int n = 0; n < attackEvaluations.Count; n++)
                 {

@@ -19,7 +19,8 @@ namespace CleverGirl {
             public float OneShotMinimumToHit = 0.4f;
         }
 
-        public int SimplifiedAmmoModeOperationThreshold = 100;
+        public int SimplifiedAmmoModeOperationThreshold = 40;
+        public bool AttemptReducingOverheatSolutions = false;
         public DecisionWeights Weights = new DecisionWeights();
         public List<string> BlockedDlls = new List<string>();
         public void LogConfig() {
