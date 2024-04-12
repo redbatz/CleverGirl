@@ -199,11 +199,11 @@ namespace CleverGirl
             // Prerequisite, check if there are too many ammo/modes
             // If so, switch to max and default mode only
             int ammoModeCounter = potentialWeapons.Sum(condensedWeapon => condensedWeapon.ammoModes.Count);
-            bool useSimplifiedOperation = ammoModeCounter > Mod.Config.SimplifiedAmmoModeOperationThreshold;
-            if (useSimplifiedOperation)
+            bool useSimplifiedSelection = ammoModeCounter > Mod.Config.SimplifiedAmmoModeSelectionThreshold;
+            if (useSimplifiedSelection)
             {
-                Mod.Log.Debug?.Write($"Found {ammoModeCounter} ammo modes, which is over threshold {Mod.Config.SimplifiedAmmoModeOperationThreshold}.");
-                Mod.Log.Debug?.Write($" => Enabling simplified operation for ammo/mode combinations.");
+                Mod.Log.Debug?.Write($"Found {ammoModeCounter} ammo modes, which is over threshold {Mod.Config.SimplifiedAmmoModeSelectionThreshold}.");
+                Mod.Log.Debug?.Write($" => Enabling simplified selection of ammo/mode.");
             }
 
             // First, filter weapons with ammoModes that won't fire
@@ -215,7 +215,7 @@ namespace CleverGirl
 
                 // If simplified is enabled, only find max shots and base mode.
                 List<string> simplifiedModeIds = new();
-                if (useSimplifiedOperation && wep.AvaibleModes().Count > 1)
+                if (useSimplifiedSelection && wep.AvaibleModes().Count > 1)
                 {
                     if (wep.AvaibleModes().First(weaponMode => weaponMode.isBaseMode, out WeaponMode baseMode))
                     {
@@ -238,12 +238,17 @@ namespace CleverGirl
                 
                 // Decided if need to check one-shot case. CAC combines the JSON field "StartingAmmoCapacity" with the JSON object InternalAmmo, so checking the latter covers both.
                 bool hasInternalAmmo = wep.exDef().isHaveInternalAmmo;
+                bool isFlyingUnit =  target.FlyingHeight() > 0;
                 
                 AmmoModePair currentAmmoMode = wep.getCurrentAmmoMode();
                 List<AmmoModePair> validAmmoModes = new List<AmmoModePair>();
                 foreach (AmmoModePair ammoMode in cWeap.ammoModes)
                 {
-                    if (useSimplifiedOperation && !simplifiedModeIds.Contains(ammoMode.modeId))
+                    if (!isFlyingUnit && Mod.Config.RestrictFiringModeToFlyingTargets.Contains(ammoMode.modeId))
+                    {
+                        continue;
+                    }
+                    if (useSimplifiedSelection && !simplifiedModeIds.Contains(ammoMode.modeId))
                     {
                         continue;
                     }
