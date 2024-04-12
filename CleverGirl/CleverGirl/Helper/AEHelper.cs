@@ -134,6 +134,12 @@ namespace CleverGirl
                                     }
                                     cWeapon.RestoreBaseAmmoMode();
                                 }
+
+                                if (aeWeaponList.TryGetValue(weapon, out AmmoModePair currentValue))
+                                {
+                                    Mod.Log.Error?.Write($"Duplicate add for '{weapon.defId} @ {weapon.GetHashCode()}'. Existing ammoModePair {currentValue}, duplicate ammoModePair {cWeapon.ammoModePair}");
+                                    continue;
+                                }
                                 aeWeaponList.Add(weapon, cWeapon.ammoModePair);
                             }
                         }
