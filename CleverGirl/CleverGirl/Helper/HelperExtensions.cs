@@ -7,8 +7,8 @@ namespace CleverGirl.Helper;
 
 public static class HelperExtensions
 {
-    public static bool MaxBy<T, V>([NotNull] this IEnumerable<T> source, Func<T, V> selector, out T match)
-        where V : IComparable<V>
+    public static bool MaxBy<TKey, TValue>([NotNull] this IEnumerable<TKey> source, Func<TKey, TValue> selector, out TKey match)
+        where TValue : IComparable<TValue>
     {
         match = default;
         if (!source.Any())
@@ -17,7 +17,7 @@ public static class HelperExtensions
         }
 
         bool first = true;
-        V maxKey = default;
+        TValue maxKey = default;
         foreach (var item in source)
         {
             if (first)
@@ -28,7 +28,7 @@ public static class HelperExtensions
             }
             else
             {
-                V currentKey = selector(item);
+                TValue currentKey = selector(item);
                 if (currentKey.CompareTo(maxKey) > 0)
                 {
                     maxKey = currentKey;

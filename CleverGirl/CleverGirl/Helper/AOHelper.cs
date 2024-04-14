@@ -1,4 +1,5 @@
-﻿using BattleTech;
+﻿using System.Collections.Concurrent;
+using BattleTech;
 using CBTBehaviorsEnhanced.Helper;
 using CBTBehaviorsEnhanced.MeleeStates;
 using IRBTModUtils.Extension;
@@ -20,7 +21,7 @@ namespace CleverGirl.Helper {
         // Evaluate all possible attacks for the attacker and target based upon their current position. Returns the total damage the target will take,
         //   which will be compared against all other targets to determine the optimal attack to make
         public static float MakeAttackOrderForTarget(AbstractActor attackerAA, ICombatant target, 
-            bool isStationary, out BehaviorTreeResults order)
+            bool isStationary, out AttackOrder order)
         {
             Mod.Log.Debug?.Write("");
             Mod.Log.Debug?.Write($"Evaluating AttackOrder isStationary: {isStationary} " +
@@ -30,7 +31,10 @@ namespace CleverGirl.Helper {
             // If the unit has no visibility to the target from the current position, they can't attack. Return immediately.
             if (!AIUtil.UnitHasVisibilityToTargetFromCurrentPosition(attackerAA, target))
             {
-                order = BehaviorTreeResults.BehaviorTreeResultsFromBoolean(false);
+                order = new AttackOrder
+                {
+                    Order = BehaviorTreeResults.BehaviorTreeResultsFromBoolean(false)
+                };
                 return 0f;
             }
 
@@ -110,7 +114,7 @@ namespace CleverGirl.Helper {
                 {
                     AmmoModeAttackEvaluation attackEvaluation = list[m];
                     Mod.Log.Trace?.Write(
-                        $"Attack Evaluation result {m} of type {attackEvaluation.AttackType} with {attackEvaluation.WeaponList.Count} weapons, " +
+                        $"Attack Evaluation result {m} of type {attackEvaluation.AttackType} with {attackEvaluation.WeaponAmmoModes.Count} weapons, " +
                         $"damage EV of {attackEvaluation.ExpectedDamage}, heat {attackEvaluation.HeatGenerated}");
                     switch (attackEvaluation.AttackType)
                     {
@@ -151,51 +155,62 @@ namespace CleverGirl.Helper {
             if (Mod.Config.AttemptReducingOverheatSolutions && rejectedDueToOverheat.Any()) 
             {
                 Mod.Log.Debug?.Write($"No solution found, but {rejectedDueToOverheat.Count} overheating solutions exist.");
-                // Loop until we find solution or 1000 attempts or list has no AttackEvaluation with weapons left.
+                // Loop until we find solution or 100 attempts or list has no AttackEvaluation with weapons left.
                 // Every loop remove one weapon from the weapons list, and if 0 remove the evaluation from the list.
                 int removeLoops = 0;
                 int totalRemoveAttempts = 0;
-                List<AmmoModeAttackEvaluation> overheatSolutions = rejectedDueToOverheat.ToList();
-                while (overheatSolutions.Any())
+                ConcurrentQueue<AmmoModeAttackEvaluation> overheatSolutions = new ConcurrentQueue<AmmoModeAttackEvaluation>(rejectedDueToOverheat);
+                while (overheatSolutions.TryDequeue(out var attackEvaluation))
                 {
-                    Mod.Log.Debug?.Write($"Iteration #{removeLoops} to find valid solution with no overheating. {overheatSolutions.Count} candidates remain.");
-
-                    // Explicit copy of the list so we can remove elements safely
-                    foreach (AmmoModeAttackEvaluation attackEvaluation in overheatSolutions.ToList())
+                    Mod.Log.Debug?.Write($"Iteration #{removeLoops} to find valid solution with no overheating. {overheatSolutions.Count + 1} candidates remain.");
+                    List<Weapon> weapons = attackEvaluation.WeaponAmmoModes.Keys.ToList();
+                    Weapon randomWeapon = weapons.GetRandomElement();
+                    Mod.Log.Trace?.Write($"Removing random weapon {randomWeapon.UIName} with AmmoMode {attackEvaluation.WeaponAmmoModes[randomWeapon]}");
+                    attackEvaluation.WeaponAmmoModes.Remove(randomWeapon);
+                    
+                    // Rebuild new list of CondensedWeaponAmmoModes
+                    Dictionary<string, CondensedWeaponAmmoMode> cwams = new();
+                    foreach (Weapon weapon in attackEvaluation.WeaponAmmoModes.Keys)
                     {
-                        Weapon randomKey = attackEvaluation.WeaponList.Keys.GetRandomElement();
-                        Mod.Log.Trace?.Write($"Removing random weapon {randomKey.UIName} with ammomode {attackEvaluation.WeaponList[randomKey]}");
-                        attackEvaluation.WeaponList.Remove(randomKey);
-                        if (attackEvaluation.WeaponList.Count == 0)
+                        if (!cwams.TryGetValue(weapon.defId, out CondensedWeaponAmmoMode cwam))
                         {
-                            Mod.Log.Trace?.Write($"No weapons remain for AttackEvaluation, removing from candidates.");
-                            overheatSolutions.Remove(attackEvaluation);
-                            continue;
+                            AmmoModePair ammoModePair = attackEvaluation.WeaponAmmoModes[weapon];
+                            cwams[weapon.defId] = new CondensedWeaponAmmoMode(new CondensedWeapon(weapon), ammoModePair);
                         }
-
-                        if (FindFirstValidAttackEvaluation(overheatSolutions, out expectedDamage, out order))
+                        else
                         {
-                            Mod.Log.Debug?.Write($"Found valid AttackEvaluation after {totalRemoveAttempts} attempts in {removeLoops} loops.");
-                            return expectedDamage;
-                        }
-
-                        if (++totalRemoveAttempts > 1000)
-                        {
-                            Mod.Log.Debug?.Write($"Aborting overheat weapons retry loop after {removeLoops} loops with {totalRemoveAttempts} total attempts.");
-                            goto failedRemoveLoop;
+                            cwam.condensedWeapon.AddWeapon(weapon);
                         }
                     }
 
+                    AmmoModeAttackEvaluation evaluation = AEHelper.EvaluateAttack(attackerAA, target, attackerAA.CurrentPosition, target.CurrentPosition, targetIsEvasive, cwams.Values.ToList(), attackEvaluation.AttackType);
+                    if (FindFirstValidAttackEvaluation(new List<AmmoModeAttackEvaluation>() { evaluation }, out expectedDamage, out order))
+                    {
+                        Mod.Log.Debug?.Write($"Found valid AttackEvaluation after {totalRemoveAttempts} attempts in {removeLoops} loops with expectedDamage {expectedDamage}.");
+                        return expectedDamage;
+                    }
+                    
+                    // If there are two or more weapons remaining, enqueue for another iteration
+                    if (attackEvaluation.WeaponAmmoModes.Count > 1)
+                    {
+                        overheatSolutions.Enqueue(attackEvaluation);
+                    }
+
+                    if (++totalRemoveAttempts > 100)
+                    {
+                        Mod.Log.Debug?.Write($"Aborting overheat weapons retry loop after {removeLoops} loops with {totalRemoveAttempts} total attempts.");
+                        goto failedRemoveLoop;
+                    }
                     removeLoops++;
                 }
             }
 
             failedRemoveLoop:
             
-            Mod.Log.Debug?.Write("Could not build an AttackOrder with damage, returning the null order. Unit will likely brace.");
+            Mod.Log.Debug?.Write($"Unable to find an AttackOrder with damage for target {target.DistinctId()}.");
             return 0f;
 
-            bool FindFirstValidAttackEvaluation(List<AmmoModeAttackEvaluation> attackEvaluations, out float makeAttackOrderForTarget, out BehaviorTreeResults order)
+            bool FindFirstValidAttackEvaluation(List<AmmoModeAttackEvaluation> attackEvaluations, out float makeAttackOrderForTarget, out AttackOrder order)
             {
                 Mod.Log.Debug?.Write($"Attempting to find first valid attack evaluation out of {attackEvaluations.Count}.");
                 // LOGIC: Now, evaluate every set of attacks in the list
@@ -205,7 +220,7 @@ namespace CleverGirl.Helper {
                     Mod.Log.Debug?.Write($" ==== Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
                     Mod.Log.Trace?.Write($"  with weapons {GetWeaponsListString(currentAttackEvaluation)}");
  
-                    if (currentAttackEvaluation.WeaponList.Count == 0)
+                    if (currentAttackEvaluation.WeaponAmmoModes.Count == 0)
                     {
                         Mod.Log.Debug?.Write("SOLUTION REJECTED - no weapons!");
                         continue;
@@ -327,28 +342,12 @@ namespace CleverGirl.Helper {
 
                         AttackOrderInfo attackOrderInfo = new AttackOrderInfo(target)
                         {
-                            Weapons = new List<Weapon>(currentAttackEvaluation.WeaponList.Keys),
+                            Weapons = new List<Weapon>(currentAttackEvaluation.WeaponAmmoModes.Keys),
                             TargetUnit = target,
                             IsMelee = false,
                             IsDeathFromAbove = false
                         };
                     
-                        // Apply the selected AmmoModes
-                    
-                        foreach (Weapon weapon in attackOrderInfo.Weapons)
-                        {
-                            AmmoModePair selectedAmmoMode = currentAttackEvaluation.WeaponList[weapon];
-                            weapon.ApplyAmmoMode(selectedAmmoMode);
-                            if (selectedAmmoMode.ammoId != null)
-                            {
-                                Mod.Log.Debug?.Write($"-- Applying selected AmmoMode {selectedAmmoMode} to weapon {weapon.UIName}");
-                            }
-                            else
-                            {
-                                Mod.Log.Debug?.Write($"-- Applying selected firing mode {selectedAmmoMode.modeId} to weapon {weapon.UIName}");
-                            }
-                        }
-                        
                         //Now that ammo and mode has been decided, we can convert back to the vanilla AttackEvulation
                         AttackEvaluation attackEvaluation = currentAttackEvaluation.ToSimpleAttackEvaluation();
                         
@@ -416,7 +415,11 @@ namespace CleverGirl.Helper {
                         behaviorTreeResults.debugOrderString = attackOrderString ?? $" using attack type: {attackEvaluation.AttackType} against: {target.DisplayName}";
 
                         Mod.Log.Debug?.Write("Returning attack order " + behaviorTreeResults.debugOrderString);
-                        order = behaviorTreeResults;
+                        order = new AttackOrder
+                        {
+                          Order = behaviorTreeResults,
+                          AttackEvaluation = currentAttackEvaluation
+                        };
                         Mod.Log.Debug?.Write($" ==== DONE Evaluating attack solution #{n} vs target: {targetActor.DistinctId()}");
                         {
                             makeAttackOrderForTarget = attackEvaluation.ExpectedDamage;
@@ -452,7 +455,7 @@ namespace CleverGirl.Helper {
             StringBuilder weaponListSB = new StringBuilder();
             weaponListSB.Append("(");
 
-            foreach (KeyValuePair<Weapon, AmmoModePair> wamp in currentAttackEvaluation.WeaponList)
+            foreach (KeyValuePair<Weapon, AmmoModePair> wamp in currentAttackEvaluation.WeaponAmmoModes)
             {
                 weaponListSB.Append("'");
                 weaponListSB.Append(wamp.Key?.UIName);

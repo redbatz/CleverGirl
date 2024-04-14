@@ -78,6 +78,10 @@ namespace CleverGirl {
                 {
                     Mod.Log.Trace?.Write($"Expected Damage cache miss for {cWeapon}, calculating");
                     expectedDamage = CalculateWeaponDamageEV(cWeapon, unitForBVContext.BehaviorTree, attackParams, unit, attackPosition, target, targetPosition);
+                    if (expectedDamage < 0)
+                    {
+                        Mod.Log.Warn?.Write($" NEGATIVE EXPECTED DAMAGE: {expectedDamage}");
+                    }
                     damageEVCache.Add(cWeapon, expectedDamage);
                 }
                 totalExpectedDam[isArtillery] += expectedDamage; 
@@ -90,11 +94,11 @@ namespace CleverGirl {
 
             if (artilleryDamage == 0)
             {
-                Mod.Log.Debug?.Write($"Expected damage for attack is {standardDamage}");
+                Mod.Log.Debug?.Write($"Expected damage for attack is {standardDamage} with blowQualityMultiplier {blowQualityMultiplier}");
             }
             else
             {
-                Mod.Log.Debug?.Write($"Expected damage for attack is standard: {standardDamage} artillery: {artilleryDamage}");
+                Mod.Log.Debug?.Write($"Expected damage for attack is standard: {standardDamage} artillery: {artilleryDamage}  blowQualityMultiplier: {blowQualityMultiplier}");
             }
 
             if (artilleryDamage > standardDamage)

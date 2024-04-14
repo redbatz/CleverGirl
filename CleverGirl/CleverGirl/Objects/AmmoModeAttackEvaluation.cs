@@ -6,7 +6,7 @@ namespace CleverGirl.Objects;
 
 public class AmmoModeAttackEvaluation
 {
-    public Dictionary<Weapon, AmmoModePair> WeaponList;
+    public Dictionary<Weapon, AmmoModePair> WeaponAmmoModes;
     public AIUtil.AttackType AttackType;
     public float HeatGenerated;
     public float ExpectedDamage;
@@ -23,12 +23,12 @@ public class AmmoModeAttackEvaluation
       if (num2 != 0)
         return num2;
       int num3 = HeatGenerated.CompareTo(attackEvaluation.HeatGenerated);
-      return -num3 != 0 ? num3 : -WeaponList.Count.CompareTo(attackEvaluation.WeaponList.Count);
+      return -num3 != 0 ? num3 : -WeaponAmmoModes.Count.CompareTo(attackEvaluation.WeaponAmmoModes.Count);
     }
 
     public override string ToString()
     {
-      string weaponString = string.Join(", ", WeaponList.Select(wamp => wamp.Key.UIName + "[" + wamp.Value + "]"));
+      string weaponString = string.Join(", ", WeaponAmmoModes.Select(wamp => wamp.Key.UIName + "[" + wamp.Value + "]"));
       return $"Weapons: {weaponString} AttackType: {AttackType} HeatGenerated: {HeatGenerated} ExpectedDamage: {ExpectedDamage} lowestHitChance: {lowestHitChance}";
     }
 
@@ -39,7 +39,7 @@ public class AmmoModeAttackEvaluation
       simple.ExpectedDamage = ExpectedDamage;
       simple.HeatGenerated = HeatGenerated;
       simple.lowestHitChance = lowestHitChance;
-      simple.WeaponList = new List<Weapon>(WeaponList.Keys);
+      simple.WeaponList = new List<Weapon>(WeaponAmmoModes.Keys);
       return simple;
     }
 }

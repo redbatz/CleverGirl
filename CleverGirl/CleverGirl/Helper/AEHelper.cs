@@ -91,60 +91,17 @@ namespace CleverGirl
             // List 0 is ranged weapons, 1 is melee+support, 2 is DFA+support
             for (int i = 0; i < 3; i++)
             {
+                AIUtil.AttackType attackType = (AIUtil.AttackType)i;
                 List<List<CondensedWeaponAmmoMode>> weaponSetsByAttackType = weaponSetListByAttack[i];
-                string attackLabel = "ranged attack";
-                if (i == 1) { attackLabel = "melee attacks"; }
-                if (i == 2) { attackLabel = "DFA attacks"; }
-                Mod.Log.Debug?.Write($"Evaluating {weaponSetsByAttackType.Count} {attackLabel}");
+                Mod.Log.Debug?.Write($"Evaluating {weaponSetsByAttackType.Count} {ConvertTypeToLabel(attackType)}");
 
                 if (weaponSetsByAttackType != null)
                 {
                     AIHelper.ClearCaches();
                     
-                    foreach (var weaponList in weaponSetsByAttackType)
+                    foreach (List<CondensedWeaponAmmoMode> weaponList in weaponSetsByAttackType)
                     {
-                        Mod.Log.Trace?.Write($"Evaluating {weaponList.Count} weapons for a {attackLabel}");
-                        AmmoModeAttackEvaluation attackEvaluation = new AmmoModeAttackEvaluation();
-                        attackEvaluation.AttackType = (AIUtil.AttackType)i;
-                        attackEvaluation.HeatGenerated = (float)AIHelper.HeatForAttack(weaponList);
-
-                        if (unit is Mech mech)
-                        {
-                            attackEvaluation.HeatGenerated += (float)mech.TempHeat;
-                            attackEvaluation.HeatGenerated -= (float)mech.AdjustedHeatsinkCapacity;
-                        }
-
-                        attackEvaluation.ExpectedDamage = AIHelper.ExpectedDamageForAttack(unit, attackEvaluation.AttackType, weaponList, target, attackPosition, targetPosition, true, unit, out var isArtilleryAttack);
-                        attackEvaluation.lowestHitChance = AIHelper.LowestHitChance(weaponList, target, attackPosition, targetPosition, targetIsEvasive);
-
-                        // Expand the list to all weaponDefs with ammoMode, not our condensed ones
-                        Mod.Log.Trace?.Write($"Expanding weapon list for AttackEvaluation");
-                        Dictionary<Weapon, AmmoModePair> aeWeaponList = new Dictionary<Weapon, AmmoModePair>();
-                        foreach (CondensedWeaponAmmoMode cWeapon in weaponList!)
-                        {
-                            List<Weapon> cWeapons = cWeapon.condensedWeapons;
-                            foreach (var weapon in cWeapons)
-                            {
-                                if (isArtilleryAttack)
-                                {
-                                    cWeapon.ApplyAmmoMode();
-                                    if (!weapon.IsArtillery())
-                                    {
-                                        continue;
-                                    }
-                                    cWeapon.RestoreBaseAmmoMode();
-                                }
-
-                                if (aeWeaponList.TryGetValue(weapon, out AmmoModePair currentValue))
-                                {
-                                    Mod.Log.Error?.Write($"Duplicate add for '{weapon.defId} @ {weapon.GetHashCode()}'. Existing ammoModePair {currentValue}, duplicate ammoModePair {cWeapon.ammoModePair}");
-                                    continue;
-                                }
-                                aeWeaponList.Add(weapon, cWeapon.ammoModePair);
-                            }
-                        }
-                        Mod.Log.Trace?.Write($"List size {weaponList?.Count} was expanded to: {aeWeaponList.Count}");
-                        attackEvaluation.WeaponList = aeWeaponList;
+                        AmmoModeAttackEvaluation attackEvaluation = EvaluateAttack(unit, target, attackPosition, targetPosition, targetIsEvasive, weaponList, attackType);
                         if (!ContainsSimilarAttack(allResults, attackEvaluation)) {
                             Mod.Log.Trace?.Write($"Adding new attackEvaluation: {attackEvaluation}");
                             allResults.Add(attackEvaluation);
@@ -163,6 +120,64 @@ namespace CleverGirl
             sortedResults.Reverse();
 
             return sortedResults;
+        }
+
+        public static AmmoModeAttackEvaluation EvaluateAttack(AbstractActor unit, ICombatant target, Vector3 attackPosition, Vector3 targetPosition, bool targetIsEvasive, List<CondensedWeaponAmmoMode> weaponList, AIUtil.AttackType attackType)
+        {
+            Mod.Log.Trace?.Write($"Evaluating {weaponList.Count} weapons for a {ConvertTypeToLabel(attackType)}");
+            AmmoModeAttackEvaluation attackEvaluation = new AmmoModeAttackEvaluation();
+            attackEvaluation.AttackType = attackType;
+            attackEvaluation.HeatGenerated = (float)AIHelper.HeatForAttack(weaponList);
+
+            if (unit is Mech mech)
+            {
+                attackEvaluation.HeatGenerated += (float)mech.TempHeat;
+                attackEvaluation.HeatGenerated -= (float)mech.AdjustedHeatsinkCapacity;
+            }
+
+            attackEvaluation.ExpectedDamage = AIHelper.ExpectedDamageForAttack(unit, attackEvaluation.AttackType, weaponList, target, attackPosition, targetPosition, true, unit, out var isArtilleryAttack);
+            attackEvaluation.lowestHitChance = AIHelper.LowestHitChance(weaponList, target, attackPosition, targetPosition, targetIsEvasive);
+
+            // Expand the list to all weaponDefs with ammoMode, not our condensed ones
+            Mod.Log.Trace?.Write($"Expanding weapon list for AttackEvaluation");
+            Dictionary<Weapon, AmmoModePair> expandedWeaponAmmoModes = new Dictionary<Weapon, AmmoModePair>();
+            foreach (CondensedWeaponAmmoMode cWeapon in weaponList!)
+            {
+                List<Weapon> cWeapons = cWeapon.condensedWeapons;
+                foreach (var weapon in cWeapons)
+                {
+                    if (isArtilleryAttack)
+                    {
+                        cWeapon.ApplyAmmoMode();
+                        if (!weapon.IsArtillery())
+                        {
+                            continue;
+                        }
+                        cWeapon.RestoreBaseAmmoMode();
+                    }
+
+                    if (expandedWeaponAmmoModes.TryGetValue(weapon, out AmmoModePair currentValue))
+                    {
+                        Mod.Log.Error?.Write($"Duplicate add for '{weapon.defId} @ {weapon.GetHashCode()}'. Existing ammoModePair {currentValue}, duplicate ammoModePair {cWeapon.ammoModePair}");
+                        continue;
+                    }
+                    expandedWeaponAmmoModes.Add(weapon, cWeapon.ammoModePair);
+                }
+            }
+            Mod.Log.Trace?.Write($"List size {weaponList?.Count} was expanded to: {expandedWeaponAmmoModes.Count}");
+            attackEvaluation.WeaponAmmoModes = expandedWeaponAmmoModes;
+            return attackEvaluation;
+        }
+
+        private static string ConvertTypeToLabel(AIUtil.AttackType attackType)
+        {
+            return attackType switch
+            {
+                AIUtil.AttackType.Shooting => "ranged attack",
+                AIUtil.AttackType.Melee => "melee attacks",
+                AIUtil.AttackType.DeathFromAbove => "DFA attacks",
+                _ => "unknown attack"
+            };
         }
 
         private static bool ContainsSimilarAttack(ConcurrentBag<AmmoModeAttackEvaluation> bag, AmmoModeAttackEvaluation evaluation)
@@ -199,8 +214,7 @@ namespace CleverGirl
         }
 
         // Make multiple sets of ranged weapons, to allow for selection of the optimal set based on range
-        public static List<List<CondensedWeaponAmmoMode>> MakeRangedWeaponSets(List<CondensedWeapon> potentialWeapons,
-            ICombatant target, Vector3 attackPosition)
+        public static List<List<CondensedWeaponAmmoMode>> MakeRangedWeaponSets(List<CondensedWeapon> potentialWeapons, ICombatant target, Vector3 attackPosition)
         {
             // Prerequisite, check if there are too many ammo/modes
             // If so, switch to max and default mode only

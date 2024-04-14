@@ -6,9 +6,9 @@ namespace CleverGirl;
 
 public class CondensedWeaponAmmoMode
 {
-    private readonly CondensedWeapon condensedWeapon;
-    private readonly AmmoModePair baseModePair;
-    public readonly AmmoModePair ammoModePair;
+    internal readonly CondensedWeapon condensedWeapon;
+    internal readonly AmmoModePair baseModePair;
+    internal readonly AmmoModePair ammoModePair;
 
     public CondensedWeaponAmmoMode(CondensedWeapon condensedWeapon, AmmoModePair ammoModePair)
     {
@@ -36,7 +36,7 @@ public class CondensedWeaponAmmoMode
 
     public override string ToString()
     {
-        return First.UIName + "/" + ammoModePair.modeId + "/" + ammoModePair.ammoId;
+        return condensedWeapon.weaponsCondensed + "x" + First.UIName + "/" + ammoModePair.modeId + "/" + ammoModePair.ammoId;
     }
     public override bool Equals(object obj)
     {

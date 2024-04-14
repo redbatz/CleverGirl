@@ -19,9 +19,7 @@ namespace CleverGirl {
             this.condensedWeapons.Add(weapon);
         }
 
-        public Weapon First {
-            get { return this.condensedWeapons[0]; }
-        }
+        public Weapon First => condensedWeapons[0];
 
         public void AddAmmoMode(AmmoModePair ammoModePair)
         {
