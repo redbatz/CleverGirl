@@ -1,15 +1,10 @@
 ﻿using System.Collections.Concurrent;
-using BattleTech;
-using CBTBehaviorsEnhanced.Helper;
-using CBTBehaviorsEnhanced.MeleeStates;
-using IRBTModUtils.Extension;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using CleverGirl.Objects;
 using CleverGirlAIDamagePrediction;
 using CustAmmoCategories;
-using TScript.Ops;
 using UnityEngine;
 using static System.Math;
 using static AttackEvaluator;
@@ -532,16 +527,11 @@ namespace CleverGirl.Helper {
                 return meleeWeaponSets;
             }
 
-            // Expand candidate weapons to a full weapon list for CBTBE so we don't have a cyclical dependency here.
-            List<Weapon> availableWeapons = new List<Weapon>();
-            candidateWeapons.MeleeWeapons.ForEach(x => availableWeapons.AddRange(x.condensedWeapons));
-
             // Determine the best possible melee attack. 
             // 1. Usable weapons will include a MeleeWeapon/DFAWeapon with the damage set to the expected virtual damage BEFORE toHit is applied
             // 2. SelectedState will need to go out to the MakeAO so it can be set
-            CleverGirlCalculator.OptimizeMelee(attacker, target, attackPos, availableWeapons,
-                out List<Weapon> usableWeapons, out MeleeAttack selectedAttack,
-                out float virtualMeleeDamage, out float totalStateDamage);
+            CBTBEHelper.OptimizeMelee(attacker, target, attackPos, candidateWeapons.MeleeWeapons,
+                out List<CondensedWeapon> usableWeapons, out float virtualMeleeDamage, out float totalStateDamage);
 
             // Determine if we're a punchbot - defined by melee damage 2x or greater than raw ranged damage
             bool mechFavorsMelee = DoesMechFavorMelee(attacker);
@@ -553,27 +543,9 @@ namespace CleverGirl.Helper {
             // TODO: Should consider if heat would be reduced by melee attack
             if (mechFavorsMelee || damageOutweighsRetaliation)
             {
-                // Convert usableWeapons back to condensedWeapons for evaluation. They should be a subset of 
-                //   meleeWeapons, so we've already checked them for canFire, etc
-                Dictionary<string, CondensedWeapon> condensed = new Dictionary<string, CondensedWeapon>();
-                foreach (Weapon weapon in usableWeapons)
-                {
-                    CondensedWeapon cWeapon = new CondensedWeapon(weapon);
-                    Mod.Log.Debug?.Write($" -- '{weapon.defId}' included");
-                    string cWepKey = weapon.weaponDef.Description.Id;
-                    if (condensed.ContainsKey(cWepKey))
-                    {
-                        condensed[cWepKey].AddWeapon(weapon);
-                    }
-                    else
-                    {
-                        condensed[cWepKey] = cWeapon;
-                    }
-                }
-                List<CondensedWeapon> condensedUsableWeps = condensed.Values.ToList();
-                Mod.Log.Debug?.Write($"There are {condensedUsableWeps.Count} usable condensed weapons.");
+                Mod.Log.Debug?.Write($"There are {usableWeapons.Count} usable condensed weapons.");
 
-                List<List<CondensedWeaponAmmoMode>> weaponSets = AEHelper.MakeWeaponAmmoModeSets(condensedUsableWeps);
+                List<List<CondensedWeaponAmmoMode>> weaponSets = AEHelper.MakeWeaponAmmoModeSets(usableWeapons);
 
                 // Add melee weapon to each set. Increase it's damage to deal with virtual damage
                 CondensedWeapon cMeleeWeapon = new CondensedWeapon(attacker.MeleeWeapon);

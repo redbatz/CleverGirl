@@ -56,7 +56,7 @@ namespace CleverGirl
                 Mod.Log.Debug?.Write($" -- weapon => '{cWeapon.First.UIName}'");
 
                 Weapon rawWeapon = cWeapon.First;
-                if (rawWeapon.WeaponCategoryValue.CanUseInMelee)
+                if (rawWeapon.WeaponCategoryValue.CanUseInMelee && rawWeapon.ForbiddenRange() < distance)
                 {
                     Mod.Log.Debug?.Write($" -- can be used in melee, adding to melee sets.");
                     MeleeWeapons.Add(cWeapon);
