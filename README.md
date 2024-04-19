@@ -24,6 +24,7 @@ The following values can be tweaked in `mod.json` to customize your experience:
 * **SimplifiedAmmoModeOperationThreshold:** Integer value, used to configure [Simplified Selection Mode](#simplified-selection-mode). If the configured value is less than the total amount of firing modes over all grouped weapons, simplified operation mode will be used..
 * **AttemptReducingOverheatSolutions:** If true, enables [Reduction of weapons on Overheat](#reduction-of-weapons-on-overheat).
 * **RestrictFiringModeToFlyingTargets:** List of *Id*s for firing modes that should only be used against flying targets. 
+* **NoMeleeWeaponCategory:** Category ID used to mark a weapon as never consider for melee attacks.
 * **Weights:** Three sub-configurations to control the decision weights for the AI:
 	* **FriendlyDamageMulti:** Weight multiplier for friendly fire damage. Higher value means AI will further down-prioritize firing solutions resulting in friendly fire damage.
 	* **PunchbotDamageMulti:** Weight multiplier for melee damage when considering melee attack vs ranged attack.
