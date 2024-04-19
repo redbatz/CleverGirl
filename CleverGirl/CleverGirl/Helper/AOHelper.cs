@@ -530,7 +530,7 @@ namespace CleverGirl.Helper {
             // Determine the best possible melee attack. 
             // 1. Usable weapons will include a MeleeWeapon/DFAWeapon with the damage set to the expected virtual damage BEFORE toHit is applied
             // 2. SelectedState will need to go out to the MakeAO so it can be set
-            CBTBEHelper.OptimizeMelee(attacker, target, attackPos, candidateWeapons.MeleeWeapons,
+            MeleeHelper.OptimizeMelee(attacker, target, attackPos, candidateWeapons.MeleeWeapons,
                 out List<CondensedWeapon> usableWeapons, out float virtualMeleeDamage, out float totalStateDamage);
 
             // Determine if we're a punchbot - defined by melee damage 2x or greater than raw ranged damage
@@ -586,6 +586,11 @@ namespace CleverGirl.Helper {
                     float amountWeaponsFireMeleeWithoutPenalty = 0f;
                     foreach (Weapon weapon in attacker.Weapons)
                     {
+                        if (!weapon.CanFireInMelee())
+                        {
+                            continue;
+                        }
+                        
                         AmmoModePair currentAmmoMode = weapon.getCurrentAmmoMode();
                         bool onlyModesWithMinRange = false;
                         foreach (AmmoModePair ammoModePair in weapon.getAvaibleFiringMethods())
@@ -624,7 +629,7 @@ namespace CleverGirl.Helper {
                 int rawRangedDam = 0, rawMeleeDam = 0;
                 foreach (Weapon weapon in attacker.Weapons)
                 {
-                    if (weapon.WeaponCategoryValue.CanUseInMelee)
+                    if (weapon.CanFireInMelee())
                     {
                         rawMeleeDam += (int)(weapon.DamagePerShot * weapon.ShotsWhenFired);
                     }

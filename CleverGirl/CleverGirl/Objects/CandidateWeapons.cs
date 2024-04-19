@@ -2,17 +2,18 @@
 using CustAmmoCategories;
 using IRBTModUtils;
 using System.Collections.Generic;
+using CleverGirl.Helper;
 using UnityEngine;
 
 namespace CleverGirl
 {
     public class CandidateWeapons
     {
-        readonly public List<CondensedWeapon> RangedWeapons = new List<CondensedWeapon>();
-        readonly public List<CondensedWeapon> MeleeWeapons = new List<CondensedWeapon>();
-        readonly public List<CondensedWeapon> DFAWeapons = new List<CondensedWeapon>();
+        public readonly List<CondensedWeapon> RangedWeapons = new List<CondensedWeapon>();
+        public readonly List<CondensedWeapon> MeleeWeapons = new List<CondensedWeapon>();
+        public readonly List<CondensedWeapon> DFAWeapons = new List<CondensedWeapon>();
 
-        readonly private Dictionary<string, CondensedWeapon> condensed = new Dictionary<string, CondensedWeapon>();
+        private readonly Dictionary<string, CondensedWeapon> condensed = new Dictionary<string, CondensedWeapon>();
 
         public CandidateWeapons(AbstractActor attacker, ICombatant target)
         {
@@ -27,7 +28,7 @@ namespace CleverGirl
                 if (HasAvailableAmmoMode(weapon))
                 {
                     Mod.Log.Debug?.Write($" -- '{weapon.defId}' included");
-                    string cWepKey = weapon.weaponDef.Description.Id;
+                    string cWepKey = weapon.defId;
                     if (condensed.ContainsKey(cWepKey))
                     {
                         condensed[cWepKey].AddWeapon(weapon);
@@ -56,7 +57,7 @@ namespace CleverGirl
                 Mod.Log.Debug?.Write($" -- weapon => '{cWeapon.First.UIName}'");
 
                 Weapon rawWeapon = cWeapon.First;
-                if (rawWeapon.WeaponCategoryValue.CanUseInMelee && rawWeapon.ForbiddenRange() < distance)
+                if (rawWeapon.CanFireInMelee(distance))
                 {
                     Mod.Log.Debug?.Write($" -- can be used in melee, adding to melee sets.");
                     MeleeWeapons.Add(cWeapon);

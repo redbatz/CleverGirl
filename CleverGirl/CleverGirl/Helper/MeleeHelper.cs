@@ -5,11 +5,12 @@ using CBTBehaviorsEnhanced.Helper;
 using CBTBehaviorsEnhanced.MeleeStates;
 using CleverGirlAIDamagePrediction;
 using CustAmmoCategories;
+using CustomComponents;
 using UnityEngine;
 
 namespace CleverGirl.Helper;
 
-public static class CBTBEHelper
+public static class MeleeHelper
 {
     // Code below copied from CBTBE to be able to use condensed weapons and ammo/mode iteration
     //
@@ -36,7 +37,7 @@ public static class CBTBEHelper
                                   $"target: {target.DistinctId()} at attackPos: {attackPos} with {canFireInMeleeWeapons.Count} melee ranged weapons.");
 
             Mod.MeleeLog.Info?.Write($"Generating melee state - see melee log.");
-            MeleeState meleeStates = MeleeHelper.GetMeleeStates(attacker, attackPos, target);
+            MeleeState meleeStates = CBTBehaviorsEnhanced.Helper.MeleeHelper.GetMeleeStates(attacker, attackPos, target);
 
             // Iterate each state, add physical and weapon damage and evaluate virtual benefit from the sum
             Mod.MeleeLog.Info?.Write($"Iterating non-DFA melee states.");
@@ -130,4 +131,33 @@ public static class CBTBEHelper
 
         return;
     }
+
+    public static bool CanFireInMelee(this Weapon weapon, float distance)
+    {
+        if (!weapon.CanFireInMelee())
+        {
+            return false;
+        }
+
+        foreach (AmmoModePair ammoModePair in weapon.getAvaibleFiringMethods())
+        {
+            weapon.ApplyAmmoMode(ammoModePair);
+            if (weapon.ForbiddenRange() < distance)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    } 
+
+    public static bool CanFireInMelee(this Weapon weapon)
+    {
+        if (!weapon.WeaponCategoryValue.CanUseInMelee)
+        {
+            return false;
+        }
+
+        return !weapon.mechComponentRef.GetComponents<Category>().Any(cat => cat.CategoryID.Equals(Mod.Config.NoMeleeWeaponCategory));
+    } 
 }

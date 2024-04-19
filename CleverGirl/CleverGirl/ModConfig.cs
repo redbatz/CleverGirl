@@ -24,6 +24,7 @@ namespace CleverGirl {
         public DecisionWeights Weights = new DecisionWeights();
         public List<string> BlockedDlls = new List<string>();
         public List<string> RestrictFiringModeToFlyingTargets = new List<string>();
+        public string NoMeleeWeaponCategory = "NeverMelee";
         public void LogConfig() {
             Mod.Log.Info?.Write("=== MOD CONFIG BEGIN ===");
             Mod.Log.Info?.Write($" LOGGING -- Debug:{this.Debug} Trace:{this.Trace}");
@@ -31,6 +32,7 @@ namespace CleverGirl {
             Mod.Log.Info?.Write($" SimplifiedAmmoModeSelectionThreshold: {this.SimplifiedAmmoModeSelectionThreshold}");
             Mod.Log.Info?.Write($" AttemptReducingOverheatSolutions: {this.AttemptReducingOverheatSolutions}");
             Mod.Log.Info?.Write($" RestrictToFlyingTargetsFiringModes: {string.Join(", ", RestrictFiringModeToFlyingTargets)}");
+            Mod.Log.Info?.Write($" NoMeleeWeaponCategory: {NoMeleeWeaponCategory}");
             Mod.Log.Info?.Write("");
             Mod.Log.Info?.Write("--- Decision Weights ---");
             Mod.Log.Info?.Write($" FriendlyDamageMulti: {this.Weights.FriendlyDamageMulti}");
