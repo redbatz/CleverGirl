@@ -1,23 +1,23 @@
-﻿
-using CleverGirl.Helper;
+﻿using System;
+using System.Collections.Generic;
+using CleverGirl.Objects;
 using CleverGirlAIDamagePrediction;
 using CustAmmoCategories;
-using System;
-using System.Collections.Generic;
 using UnityEngine;
 
-namespace CleverGirl {
+namespace CleverGirl.Helper {
     public class AIHelper {
         
         private static readonly Dictionary<CondensedWeaponAmmoMode, float> damageEVCache = new Dictionary<CondensedWeaponAmmoMode, float>();
+        private static readonly Dictionary<CondensedWeaponAmmoMode, float> lowestHitChanceCache = new Dictionary<CondensedWeaponAmmoMode, float>();
 
         public static int HeatForAttack(List<CondensedWeaponAmmoMode> weaponList) {
             int num = 0;
-            for (int i = 0; i < weaponList.Count; i++) {
-                CondensedWeaponAmmoMode cWeapon = weaponList[i];
+            foreach (CondensedWeaponAmmoMode cWeapon in weaponList)
+            {
                 cWeapon.ApplyAmmoMode();
                 Weapon rawWeapon = cWeapon.First;
-                num += ((int)rawWeapon.HeatGenerated * cWeapon.weaponsCondensed);
+                num += ((int)rawWeapon.HeatGenerated * cWeapon.WeaponsCondensedCount);
                 cWeapon.RestoreBaseAmmoMode();
             }
             return num;
@@ -25,12 +25,22 @@ namespace CleverGirl {
 
         public static float LowestHitChance(List<CondensedWeaponAmmoMode> weaponList, ICombatant target, Vector3 attackPosition, Vector3 targetPosition, bool targetIsEvasive) {
             float num = float.MaxValue;
-            for (int i = 0; i < weaponList.Count; i++) {
-                CondensedWeaponAmmoMode cWeapon = weaponList[i];
-                cWeapon.ApplyAmmoMode();
-                float toHitFromPosition = cWeapon.First.GetToHitFromPosition(target, 1, attackPosition, targetPosition, true, targetIsEvasive, false);
+            foreach (CondensedWeaponAmmoMode cWeapon in weaponList)
+            {
+                if (lowestHitChanceCache.TryGetValue(cWeapon, out float toHitFromPosition))
+                {
+                    Mod.Log.Trace?.Write($"Lowest Hit Chance cache hit for {cWeapon} -> {toHitFromPosition}");
+                }
+                else
+                {
+                    Mod.Log.Trace?.Write($"Lowest Hit Chance cache miss for {cWeapon}, calculating");
+                    cWeapon.ApplyAmmoMode();
+                    toHitFromPosition = cWeapon.First.GetToHitFromPosition(target, 1, attackPosition, targetPosition, true, targetIsEvasive, false);
+                    cWeapon.RestoreBaseAmmoMode();
+                    lowestHitChanceCache.Add(cWeapon, toHitFromPosition);
+                }
+                
                 num = Mathf.Min(num, toHitFromPosition);
-                cWeapon.RestoreBaseAmmoMode();
             }
             return num;
         }
@@ -68,7 +78,6 @@ namespace CleverGirl {
             };
             foreach (var cWeapon in weaponList)
             {
-                cWeapon.ApplyAmmoMode();
                 bool isArtillery = cWeapon.First.IsArtillery();
                 if (damageEVCache.TryGetValue(cWeapon, out var expectedDamage))
                 {
@@ -77,15 +86,17 @@ namespace CleverGirl {
                 else
                 {
                     Mod.Log.Trace?.Write($"Expected Damage cache miss for {cWeapon}, calculating");
+                    cWeapon.ApplyAmmoMode();
                     expectedDamage = CalculateWeaponDamageEV(cWeapon, unitForBVContext.BehaviorTree, attackParams, unit, attackPosition, target, targetPosition);
+                    cWeapon.RestoreBaseAmmoMode();
                     if (expectedDamage < 0)
                     {
                         Mod.Log.Warn?.Write($" NEGATIVE EXPECTED DAMAGE: {expectedDamage}");
                     }
+
                     damageEVCache.Add(cWeapon, expectedDamage);
                 }
                 totalExpectedDam[isArtillery] += expectedDamage; 
-                cWeapon.RestoreBaseAmmoMode();
             }
 
             float blowQualityMultiplier = unit.Combat.ToHit.GetBlowQualityMultiplier(attackParams.Quality);
@@ -94,16 +105,16 @@ namespace CleverGirl {
 
             if (artilleryDamage == 0)
             {
-                Mod.Log.Debug?.Write($"Expected damage for attack is {standardDamage} with blowQualityMultiplier {blowQualityMultiplier}");
+                Mod.Log.Trace?.Write($"Expected damage for attack is {standardDamage} with blowQualityMultiplier {blowQualityMultiplier}");
             }
             else
             {
-                Mod.Log.Debug?.Write($"Expected damage for attack is standard: {standardDamage} artillery: {artilleryDamage}  blowQualityMultiplier: {blowQualityMultiplier}");
+                Mod.Log.Trace?.Write($"Expected damage for attack is standard: {standardDamage} artillery: {artilleryDamage}  blowQualityMultiplier: {blowQualityMultiplier}");
             }
 
             if (artilleryDamage > standardDamage)
             {
-                Mod.Log.Debug?.Write("-- Picking artillery attack");
+                Mod.Log.Debug?.Write($"-- Picking artillery attack since expected damage for artillery attack {artilleryDamage} is more than standard [{standardDamage}]");
                 isArtilleryAttack = true;
                 return artilleryDamage;
             }
@@ -176,8 +187,8 @@ namespace CleverGirl {
                 Mod.Log.Debug?.Write($"Melee status weight calculated as: {meleeStatusWeights}");
 
                 float weaponDamageEV = DetermineDamage(cWeapon, attackParams, attacker, attackerPos, target, heatToDamRatio, stabToDamRatio);
-                float aggregateDamageEV = weaponDamageEV * cWeapon.weaponsCondensed;
-                Mod.Log.Debug?.Write($"Aggregate EV = {aggregateDamageEV} == damage: {weaponDamageEV} * weaponsCondensed: {cWeapon.weaponsCondensed}");
+                float aggregateDamageEV = weaponDamageEV * cWeapon.WeaponsCondensedCount;
+                Mod.Log.Debug?.Write($"Aggregate EV = {aggregateDamageEV} == damage: {weaponDamageEV} * weaponsCondensed: {cWeapon.WeaponsCondensedCount}");
 
                 return aggregateDamageEV;
             }
@@ -310,6 +321,7 @@ namespace CleverGirl {
         public static void ClearCaches()
         {
             damageEVCache.Clear();
+            lowestHitChanceCache.Clear();
         }
     }
 }

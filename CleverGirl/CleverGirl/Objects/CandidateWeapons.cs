@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using CleverGirl.Helper;
 using UnityEngine;
 
-namespace CleverGirl
+namespace CleverGirl.Objects
 {
     public class CandidateWeapons
     {

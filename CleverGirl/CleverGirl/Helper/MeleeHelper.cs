@@ -80,9 +80,9 @@ public static class MeleeHelper
 
                         weapon.ApplyAmmoMode(currentAmmoMode);
 
-                        rangedDamage += weaponMaxRangedDamage * cWeapon.weaponsCondensed;
-                        rangedStab += weaponMaxRangedStab * cWeapon.weaponsCondensed;
-                        rangedHeat += weaponMaxRangedHeat * cWeapon.weaponsCondensed;
+                        rangedDamage += weaponMaxRangedDamage * cWeapon.WeaponCount;
+                        rangedStab += weaponMaxRangedStab * cWeapon.WeaponCount;
+                        rangedHeat += weaponMaxRangedHeat * cWeapon.WeaponCount;
                         
                         Mod.MeleeLog.Info?.Write($"  weapon: {weapon.UIName} adds damage: {weaponMaxRangedDamage}  instab: {weaponMaxRangedStab}  heat: {weaponMaxRangedHeat}");
                     }

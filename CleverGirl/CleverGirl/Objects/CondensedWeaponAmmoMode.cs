@@ -2,13 +2,13 @@
 using CleverGirlAIDamagePrediction;
 using CustAmmoCategories;
 
-namespace CleverGirl;
+namespace CleverGirl.Objects;
 
 public class CondensedWeaponAmmoMode
 {
     internal readonly CondensedWeapon condensedWeapon;
-    internal readonly AmmoModePair baseModePair;
     internal readonly AmmoModePair ammoModePair;
+    private readonly AmmoModePair baseModePair;
 
     public CondensedWeaponAmmoMode(CondensedWeapon condensedWeapon, AmmoModePair ammoModePair)
     {
@@ -19,7 +19,7 @@ public class CondensedWeaponAmmoMode
 
     public Weapon First => condensedWeapon.First;
 
-    public int weaponsCondensed => condensedWeapon.weaponsCondensed;
+    public int WeaponsCondensedCount => condensedWeapon.WeaponCount;
 
     public List<Weapon> condensedWeapons => condensedWeapon.condensedWeapons;
 
@@ -36,7 +36,7 @@ public class CondensedWeaponAmmoMode
 
     public override string ToString()
     {
-        return condensedWeapon.weaponsCondensed + "x" + First.UIName + "/" + ammoModePair.modeId + "/" + ammoModePair.ammoId;
+        return $"{condensedWeapon.WeaponCount}x{First.UIName}/{ammoModePair.modeId}/{ammoModePair.ammoId}";
     }
     public override bool Equals(object obj)
     {

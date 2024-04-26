@@ -1,19 +1,16 @@
-﻿using CleverGirl.Analytics;
-using CleverGirl.Helper;
-using CleverGirlAIDamagePrediction;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using CleverGirl.Analytics;
 using CleverGirl.Objects;
+using CleverGirlAIDamagePrediction;
 using CustAmmoCategories;
 using UnityEngine;
 
-namespace CleverGirl
+namespace CleverGirl.Helper
 {
-
     public static class AEHelper
     {
-
         // Initialize any decision-making data necessary to make an attack order. Fetch the current state of opponents
         //  and cache it for quick look-up
         public static void InitializeAttackOrderDecisionData(AbstractActor unit)
@@ -32,7 +29,10 @@ namespace CleverGirl
             Mod.Log.Debug?.Write($"Evaluating all actors for hostility to {unit.DistinctId()}");
             foreach (ICombatant combatant in unit.Combat.GetAllImporantCombatants())
             {
-                if (combatant.GUID == unit.GUID) { continue; }
+                if (combatant.GUID == unit.GUID)
+                {
+                    continue;
+                }
 
                 // Will only include alive actors and buildings that are 'tab' targets
                 if (unit.Combat.HostilityMatrix.IsFriendly(unit.team, combatant.team))
@@ -78,6 +78,7 @@ namespace CleverGirl
                     }
                 }
             }
+
             return designatedTarget;
         }
 
@@ -85,7 +86,6 @@ namespace CleverGirl
             List<List<CondensedWeaponAmmoMode>>[] weaponSetListByAttack, Vector3 attackPosition, Vector3 targetPosition,
             bool targetIsEvasive)
         {
-
             ConcurrentBag<AmmoModeAttackEvaluation> allResults = new ConcurrentBag<AmmoModeAttackEvaluation>();
 
             // List 0 is ranged weapons, 1 is melee+support, 2 is DFA+support
@@ -98,11 +98,12 @@ namespace CleverGirl
                 if (weaponSetsByAttackType != null)
                 {
                     AIHelper.ClearCaches();
-                    
+
                     foreach (List<CondensedWeaponAmmoMode> weaponList in weaponSetsByAttackType)
                     {
                         AmmoModeAttackEvaluation attackEvaluation = EvaluateAttack(unit, target, attackPosition, targetPosition, targetIsEvasive, weaponList, attackType);
-                        if (!ContainsSimilarAttack(allResults, attackEvaluation)) {
+                        if (!ContainsSimilarAttack(allResults, attackEvaluation))
+                        {
                             Mod.Log.Trace?.Write($"Adding new attackEvaluation: {attackEvaluation}");
                             allResults.Add(attackEvaluation);
                         }
@@ -125,14 +126,16 @@ namespace CleverGirl
         public static AmmoModeAttackEvaluation EvaluateAttack(AbstractActor unit, ICombatant target, Vector3 attackPosition, Vector3 targetPosition, bool targetIsEvasive, List<CondensedWeaponAmmoMode> weaponList, AIUtil.AttackType attackType)
         {
             Mod.Log.Trace?.Write($"Evaluating {weaponList.Count} weapons for a {ConvertTypeToLabel(attackType)}");
-            AmmoModeAttackEvaluation attackEvaluation = new AmmoModeAttackEvaluation();
-            attackEvaluation.AttackType = attackType;
-            attackEvaluation.HeatGenerated = (float)AIHelper.HeatForAttack(weaponList);
+            AmmoModeAttackEvaluation attackEvaluation = new AmmoModeAttackEvaluation
+            {
+                AttackType = attackType,
+                HeatGenerated = AIHelper.HeatForAttack(weaponList)
+            };
 
             if (unit is Mech mech)
             {
-                attackEvaluation.HeatGenerated += (float)mech.TempHeat;
-                attackEvaluation.HeatGenerated -= (float)mech.AdjustedHeatsinkCapacity;
+                attackEvaluation.HeatGenerated += mech.TempHeat;
+                attackEvaluation.HeatGenerated -= mech.AdjustedHeatsinkCapacity;
             }
 
             attackEvaluation.ExpectedDamage = AIHelper.ExpectedDamageForAttack(unit, attackEvaluation.AttackType, weaponList, target, attackPosition, targetPosition, true, unit, out var isArtilleryAttack);
@@ -153,6 +156,7 @@ namespace CleverGirl
                         {
                             continue;
                         }
+
                         cWeapon.RestoreBaseAmmoMode();
                     }
 
@@ -161,10 +165,12 @@ namespace CleverGirl
                         Mod.Log.Error?.Write($"Duplicate add for '{weapon.defId} @ {weapon.GetHashCode()}'. Existing ammoModePair {currentValue}, duplicate ammoModePair {cWeapon.ammoModePair}");
                         continue;
                     }
+
                     expandedWeaponAmmoModes.Add(weapon, cWeapon.ammoModePair);
                 }
             }
-            Mod.Log.Trace?.Write($"List size {weaponList?.Count} was expanded to: {expandedWeaponAmmoModes.Count}");
+
+            Mod.Log.Trace?.Write($"List size {weaponList.Count} was expanded to: {expandedWeaponAmmoModes.Count}");
             attackEvaluation.WeaponAmmoModes = expandedWeaponAmmoModes;
             return attackEvaluation;
         }
@@ -182,15 +188,14 @@ namespace CleverGirl
 
         private static bool ContainsSimilarAttack(ConcurrentBag<AmmoModeAttackEvaluation> bag, AmmoModeAttackEvaluation evaluation)
         {
-            return bag.Any(bagEvaluation => bagEvaluation.AttackType.Equals(evaluation.AttackType) 
-                                            && bagEvaluation.HeatGenerated.Equals(evaluation.HeatGenerated) 
-                                            && bagEvaluation.ExpectedDamage.Equals(evaluation.ExpectedDamage) 
+            return bag.Any(bagEvaluation => bagEvaluation.AttackType.Equals(evaluation.AttackType)
+                                            && bagEvaluation.HeatGenerated.Equals(evaluation.HeatGenerated)
+                                            && bagEvaluation.ExpectedDamage.Equals(evaluation.ExpectedDamage)
                                             && bagEvaluation.lowestHitChance.Equals(evaluation.lowestHitChance));
         }
 
         public static bool MeleeDamageOutweighsRisk(float attackerMeleeDam, Mech attacker, ICombatant target)
         {
-
             if (attackerMeleeDam <= 0f)
             {
                 Mod.Log.Debug?.Write("Attacker has no expected damage, melee is too risky.");
@@ -225,6 +230,10 @@ namespace CleverGirl
                 Mod.Log.Debug?.Write($"Found {ammoModeCounter} ammo modes, which is over threshold {Mod.Config.SimplifiedAmmoModeSelectionThreshold}.");
                 Mod.Log.Debug?.Write($" => Enabling simplified selection of ammo/mode.");
             }
+            else
+            {
+                Mod.Log.Debug?.Write($"Found {ammoModeCounter} ammo modes, which is below threshold {Mod.Config.SimplifiedAmmoModeSelectionThreshold}.");
+            }
 
             // First, filter weapons with ammoModes that won't fire
             List<CondensedWeapon> condensedWeaponAmmoModes = new List<CondensedWeapon>();
@@ -255,11 +264,11 @@ namespace CleverGirl
                         continue;
                     }
                 }
-                
+
                 // Decided if need to check one-shot case. CAC combines the JSON field "StartingAmmoCapacity" with the JSON object InternalAmmo, so checking the latter covers both.
                 bool hasInternalAmmo = wep.exDef().isHaveInternalAmmo;
-                bool isFlyingUnit =  target.FlyingHeight() > 0;
-                
+                bool isFlyingUnit = target.FlyingHeight() > 0;
+
                 AmmoModePair currentAmmoMode = wep.getCurrentAmmoMode();
                 List<AmmoModePair> validAmmoModes = new List<AmmoModePair>();
                 foreach (AmmoModePair ammoMode in cWeap.ammoModes)
@@ -268,38 +277,39 @@ namespace CleverGirl
                     {
                         continue;
                     }
+
                     if (useSimplifiedSelection && !simplifiedModeIds.Contains(ammoMode.modeId))
                     {
                         continue;
                     }
+
                     wep.ApplyAmmoMode(ammoMode);
                     if (distance < wep.MinRange)
                     {
                         Mod.Log.Debug?.Write($" Skipping ammoMode {ammoMode} for {wep.UIName} in ranged set as distance: {distance} < minRange: {wep.MinRange}");
                         continue;
                     }
-                   
+
                     //Does the current mode use internal ammo and does it have enough for just a single shot?
                     //This can be a false positive if the mode had more internal ammo originally but now has exactly enough ammunition left for a single shot. But that is probably a good case for the AI To be a bit more hesitant either way.
                     if (hasInternalAmmo && wep.mode().AmmoCategory.BaseCategory.UsesInternalAmmo && wep.CurrentAmmo == wep.mode().ShotsWhenFired)
                     {
-                        float toHitFromPosition = cWeap.First.GetToHitFromPosition(target, 1, attackPosition,
-                            target.CurrentPosition, true, true, false);
+                        float toHitFromPosition = cWeap.First.GetToHitFromPosition(target, 1, attackPosition, target.CurrentPosition, true, true);
                         if (toHitFromPosition < Mod.Config.Weights.OneShotMinimumToHit)
                         {
                             Mod.Log.Debug?.Write($" Skipping ammo mode {ammoMode} for {wep.UIName} in ranged set as toHitFromPosition: {toHitFromPosition} is below OneShotMinimumToHit: {Mod.Config.Weights.OneShotMinimumToHit}");
                             continue;
                         }
                     }
-                    
+
                     validAmmoModes.Add(ammoMode);
-                    
+
                     //TODO: Add more things to check for ammoMode?
                 }
-                
+
                 wep.ApplyAmmoMode(currentAmmoMode);
                 wep.ResetTempAmmo();
-                
+
                 if (validAmmoModes.Any())
                 {
                     cWeap.ammoModes = validAmmoModes;
@@ -314,7 +324,7 @@ namespace CleverGirl
             return MakeWeaponAmmoModeSets(condensedWeaponAmmoModes);
         }
 
-         public static List<List<CondensedWeaponAmmoMode>> MakeWeaponAmmoModeSets(List<CondensedWeapon> weapons)
+        public static List<List<CondensedWeaponAmmoMode>> MakeWeaponAmmoModeSets(List<CondensedWeapon> weapons)
         {
             var permutations = new List<List<CondensedWeaponAmmoMode>>();
             var currentPermutation = new List<CondensedWeaponAmmoMode>();
@@ -336,7 +346,7 @@ namespace CleverGirl
                 if (seenPermutations.Add(currentPermutation.ToList()))
                 {
                     // Add a copy to the list of permutations is not seen
-                    permutations.Add(currentPermutation.ToList()); 
+                    permutations.Add(currentPermutation.ToList());
                 }
 
                 return;
@@ -364,7 +374,7 @@ namespace CleverGirl
                     return true;
                 if (x == null || y == null)
                     return false;
-                
+
                 // Check if the counts are equal
                 if (x.Count != y.Count)
                     return false;
@@ -382,6 +392,7 @@ namespace CleverGirl
                     {
                         hash = hash * 31 + item.GetHashCode();
                     }
+
                     return hash;
                 }
             }
