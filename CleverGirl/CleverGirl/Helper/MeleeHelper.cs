@@ -158,6 +158,6 @@ public static class MeleeHelper
             return false;
         }
 
-        return !weapon.mechComponentRef.GetComponents<Category>().Any(cat => cat.CategoryID.Equals(Mod.Config.NoMeleeWeaponCategory));
+        return !weapon.baseComponentRef?.GetComponents<Category>().Any(cat => cat.CategoryID.Equals(Mod.Config.NoMeleeWeaponCategory)) ?? false;
     } 
 }
