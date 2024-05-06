@@ -112,9 +112,9 @@ namespace CleverGirl.Helper {
                 Mod.Log.Trace?.Write($"Expected damage for attack is standard: {standardDamage} artillery: {artilleryDamage}  blowQualityMultiplier: {blowQualityMultiplier}");
             }
 
-            if (artilleryDamage > standardDamage)
+            if (artilleryDamage * Mod.Config.PrioritizeArtilleryDamageRatio > standardDamage)
             {
-                Mod.Log.Debug?.Write($"-- Picking artillery attack since expected damage for artillery attack {artilleryDamage} is more than standard [{standardDamage}]");
+                Mod.Log.Debug?.Write($"-- Picking artillery attack since expected damage for artillery attack {artilleryDamage} x ratio {Mod.Config.PrioritizeArtilleryDamageRatio} is more than standard [{standardDamage}]");
                 isArtilleryAttack = true;
                 return artilleryDamage;
             }
