@@ -29,6 +29,7 @@ The following values can be tweaked in `mod.json` to customize your experience:
 	* **FriendlyDamageMulti:** Weight multiplier for friendly fire damage. Higher value means AI will further down-prioritize firing solutions resulting in friendly fire damage.
 	* **PunchbotDamageMulti:** Weight multiplier for melee damage when considering melee attack vs ranged attack.
 	* **OneShotMinimumToHit:** Minimum hit chance for one-shot weapons to be part of a potential solution.
+* **PrioritizeArtilleryDamageRatio:** The ratio artillery damage is multplied by when deciding if to use artillery or standard damage.	
 	
 #### Standard selection of firing solution
 The standard case of selection of which weapons a unit should fire is done using the following base steps:
